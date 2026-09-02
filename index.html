@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sirvi Brothers - Billing Dashboard</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <datalist id="parties-list">
+        <!-- Populated dynamically -->
+    </datalist>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-circle">SB</div>
+                <div class="company-info">
+                    <h2>Sirvi Brothers</h2>
+                    <span class="gstn">GSTN: XYZ123456789</span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-target="home-tab">
+                    <i class="ph ph-house"></i> Home Dashboard
+                </a>
+                <a href="#" class="nav-item" data-target="billing-tab">
+                    <i class="ph ph-receipt"></i> New Bill
+                </a>
+                <a href="#" class="nav-item" data-target="sales-tab">
+                    <i class="ph ph-chart-bar"></i> Total Sales
+                </a>
+                <a href="#" class="nav-item" data-target="credit-tab">
+                    <i class="ph ph-hand-coins"></i> Credit / Due
+                </a>
+                <a href="#" class="nav-item" data-target="purchases-tab">
+                    <i class="ph ph-shopping-cart"></i> Purchases
+                </a>
+                <a href="#" class="nav-item" data-target="inventory-tab">
+                    <i class="ph ph-package"></i> Inventory / Stock
+                </a>
+                <a href="#" class="nav-item" data-target="parties-tab">
+                    <i class="ph ph-users"></i> Parties / Customers
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <div class="topbar-passbook" style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-color); background: var(--surface-color); position: relative; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex: 1; margin-right: 2rem;">
+                    <button id="sidebar-toggle-btn" class="btn btn-icon" style="background: transparent; color: var(--text-main); font-size: 1.5rem; border: none; cursor: pointer; padding: 0.5rem; border-radius: var(--radius-md);">
+                        <i class="ph ph-list"></i>
+                    </button>
+                    <div id="mantra-container" style="font-style: italic; color: var(--primary-color); font-weight: 500; font-size: 1.1rem; transition: opacity 1s ease-in-out; opacity: 1; width: 100%;">
+                        <!-- Mantra will be injected here -->
+                    </div>
+                </div>
+                <button id="passbook-toggle-btn" class="btn" style="background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); white-space: nowrap;">
+                    <i class="ph ph-wallet"></i> Passbook: <span id="top-live-balance" style="color: var(--danger-color); font-weight: bold; margin-left: 0.5rem;">₹ 0.00</span>
+                </button>
+                
+                <div id="passbook-dropdown" class="passbook-dropdown" style="display: none; position: absolute; top: 100%; right: 2rem; width: 500px; background: var(--surface-color); box-shadow: var(--shadow-lg); border-radius: var(--radius-lg); z-index: 100; padding: 1rem; border: 1px solid var(--border-color);">
+                    <h3 style="margin-top: 0;">Passbook Ledger</h3>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="data-table" id="passbook-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Ref</th>
+                                    <th>Type</th>
+                                    <th style="color: var(--danger-color);">Debit</th>
+                                    <th style="color: var(--success-color);">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab: Home Dashboard -->
+            <section id="home-tab" class="tab-pane active">
+                <div class="page-header">
+                    <h1>Business Overview</h1>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="ph ph-currency-inr"></i></div>
+                        <div class="stat-details">
+                            <h3>Daily Sales</h3>
+                            <p id="dash-daily-sales">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="ph ph-chart-line-up"></i></div>
+                        <div class="stat-details">
+                            <h3>Weekly Sales</h3>
+                            <p id="dash-weekly-sales">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="ph ph-calendar-check"></i></div>
+                        <div class="stat-details">
+                            <h3>Monthly Sales</h3>
+                            <p id="dash-monthly-sales">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="ph ph-receipt"></i></div>
+                        <div class="stat-details">
+                            <h3>Avg Order Value</h3>
+                            <p id="dash-avg-order">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-card-danger">
+                        <div class="stat-icon"><i class="ph ph-warning-circle"></i></div>
+                        <div class="stat-details">
+                            <h3>Total Due Amount</h3>
+                            <p id="dash-total-due">₹ 0.00</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Billing -->
+            <section id="billing-tab" class="tab-pane">
+                <div class="page-header">
+                    <h1>New Bill</h1>
+                </div>
+
+                <div class="form-card">
+                    <div class="form-row form-row-header">
+                        <div class="form-group">
+                            <label>Date</label>
+                            <input type="date" id="bill-date">
+                        </div>
+                        <div class="form-group due-date-group" style="display: none;">
+                            <label>Target Due Date</label>
+                            <input type="date" id="due-date">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Buyer Name</label>
+                            <input type="text" id="buyer-name" list="parties-list" placeholder="Enter buyer name">
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile Number (Required)</label>
+                            <input type="tel" id="buyer-mobile" placeholder="Enter mobile number">
+                        </div>
+                        <div class="form-group">
+                            <label>Buyer GSTN</label>
+                            <input type="text" id="buyer-gstn" placeholder="Enter GSTN (Optional)">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label>Buyer Address</label>
+                            <input type="text" id="buyer-address" placeholder="Enter complete address">
+                        </div>
+                    </div>
+                    
+                    <div id="buyer-history-container" style="display: none; background: #F9FAFB; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h4 style="margin: 0; color: var(--text-main); font-size: 0.95rem;">Customer History</h4>
+                            <div style="font-weight: bold; color: var(--danger-color); font-size: 1.1rem;">
+                                Total Due: <span id="buyer-history-due">₹ 0.00</span>
+                            </div>
+                        </div>
+                        <ul id="buyer-history-list" style="margin: 0; padding-left: 1.5rem; color: var(--secondary-color); font-size: 0.85rem;">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+
+                    <div class="items-section">
+                        <h3>Items Purchased</h3>
+                        <div class="table-responsive">
+                            <table class="items-table" id="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Variant</th>
+                                        <th style="width: 80px;">HSN</th>
+                                        <th style="width: 100px;">Price (₹)</th>
+                                        <th style="width: 80px;">Qty</th>
+                                        <th style="width: 120px;">Amount (₹)</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Rows added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="btn btn-secondary" id="add-row-btn">
+                            <i class="ph ph-plus"></i> Add Item
+                        </button>
+                    </div>
+
+                    <div class="form-footer">
+                        <div class="total-section" style="display: flex; gap: 2rem; align-items: center;">
+                            <div>
+                                <span>Total Amount:</span>
+                                <h2 id="grand-total" class="amount-red" style="margin: 0;">₹ 0.00</h2>
+                            </div>
+                            <div>
+                                <span>Paid Amount:</span>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                                    <span style="font-size: 1.2rem; font-weight: bold; color: var(--text-main);">₹</span>
+                                    <input type="number" id="paid-amount" style="width: 120px; font-size: 1.2rem; font-weight: bold; padding: 0.5rem;" min="0" step="0.01">
+                                </div>
+                            </div>
+                            <div class="due-amount-display" id="due-amount-container" style="display: none;">
+                                <span>Due Amount:</span>
+                                <h2 id="due-amount" style="margin: 0; color: var(--danger-color);">₹ 0.00</h2>
+                            </div>
+                        </div>
+                        <div class="action-buttons" style="display: flex; gap: 1rem;">
+                            <button class="btn btn-secondary" id="save-bill-btn">
+                                <i class="ph ph-floppy-disk"></i> Save
+                            </button>
+                            <button class="btn btn-primary" id="download-bill-btn">
+                                <i class="ph ph-download-simple"></i> Download
+                            </button>
+                            <button class="btn btn-primary" id="share-bill-btn">
+                                <i class="ph ph-share-network"></i> Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Total Sales -->
+            <section id="sales-tab" class="tab-pane">
+                <div class="page-header">
+                    <h1>Total Sales</h1>
+                </div>
+                
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <h3>Today's Sales</h3>
+                        <div class="stat-value" id="sales-today">₹ 0.00</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>This Week</h3>
+                        <div class="stat-value" id="sales-week">₹ 0.00</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>This Month</h3>
+                        <div class="stat-value" id="sales-month">₹ 0.00</div>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Recent Sales</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="sales-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Invoice No.</th>
+                                    <th>Buyer Name</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Credit / Due -->
+            <section id="credit-tab" class="tab-pane">
+                <div class="page-header">
+                    <h1>Credit / Due</h1>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Outstanding Credits</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="credit-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Buyer Name</th>
+                                    <th>Mobile</th>
+                                    <th>Due Amount</th>
+                                    <th>Target Due Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Inventory / Stock -->
+            <section id="inventory-tab" class="tab-pane">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1>Inventory / Stock</h1>
+                    <button class="btn btn-primary" id="add-inventory-btn">
+                        <i class="ph ph-plus"></i> Add New Item
+                    </button>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                            <h3>Current Stock</h3>
+                        </div>
+                        <div class="inventory-filters" id="inventory-filters">
+                            <button class="filter-btn active" data-filter="all">All Items</button>
+                            <button class="filter-btn filter-danger" data-filter="0">Out of Stock (0)</button>
+                            <button class="filter-btn filter-warning" data-filter="1-3">Critical (1-3)</button>
+                            <button class="filter-btn" data-filter="4-10">Low (4-10)</button>
+                            <button class="filter-btn" data-filter="11-30">Moderate (11-30)</button>
+                            <button class="filter-btn" data-filter="31-50">Healthy (31-50)</button>
+                            <button class="filter-btn" data-filter="51-100">Excess (51-100)</button>
+                        </div>
+                    </div>
+                    <div id="inventory-container">
+                        <!-- Matrices populated dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Parties / Customers -->
+            <section id="parties-tab" class="tab-pane">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1>Parties / Customers</h1>
+                    <div style="display: flex; gap: 1rem;">
+                        <button class="btn btn-secondary" id="sort-due-btn">
+                            <i class="ph ph-sort-descending"></i> Sort High-to-Low Due
+                        </button>
+                        <button class="btn btn-primary" id="add-party-btn">
+                            <i class="ph ph-plus"></i> Add New Customer
+                        </button>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Customer Directory</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="parties-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Mobile</th>
+                                    <th>GSTN</th>
+                                    <th>Address</th>
+                                    <th>Total Amount</th>
+                                    <th>Due Amount</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Purchases -->
+            <section id="purchases-tab" class="tab-pane">
+                <div class="page-header">
+                    <h1>Purchases</h1>
+                </div>
+
+                <div class="form-card">
+                    <div class="form-row-header form-row">
+                        <div class="form-group">
+                            <label>Purchase Date</label>
+                            <input type="date" id="purchase-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Vendor Name</label>
+                            <input type="text" id="purchase-vendor-name" list="parties-list" placeholder="Select or type vendor name">
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile Number (Optional)</label>
+                            <input type="tel" id="purchase-vendor-mobile" placeholder="Enter mobile number">
+                        </div>
+                    </div>
+                    <div id="vendor-history-container" style="display: none; background: #F9FAFB; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h4 style="margin: 0; color: var(--text-main); font-size: 0.95rem;">Vendor History</h4>
+                        </div>
+                        <ul id="vendor-history-list" style="margin: 0; padding-left: 1.5rem; color: var(--secondary-color); font-size: 0.85rem;">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+                    
+                    <div class="items-section">
+                        <h3>Items Purchased</h3>
+                        <div class="table-responsive">
+                            <table class="items-table" id="purchase-items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Variant</th>
+                                        <th style="width: 80px;">HSN</th>
+                                        <th style="width: 100px;">Unit Price (₹)</th>
+                                        <th style="width: 80px;">Qty</th>
+                                        <th style="width: 120px;">Amount (₹)</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Rows added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="btn btn-secondary" id="add-purchase-row-btn">
+                            <i class="ph ph-plus"></i> Add Item
+                        </button>
+                    </div>
+
+                    <div class="form-footer">
+                        <div class="total-section" style="display: flex; gap: 2rem; align-items: center;">
+                            <div>
+                                <span>Total Amount:</span>
+                                <h2 id="purchase-grand-total" class="amount-red" style="margin: 0;">₹ 0.00</h2>
+                            </div>
+                        </div>
+                        <div class="action-buttons" style="display: flex; gap: 1rem;">
+                            <button class="btn btn-primary" id="save-purchase-btn">
+                                <i class="ph ph-floppy-disk"></i> Save Purchase
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3>Recent Purchases</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="purchase-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Vendor Name</th>
+                                    <th>Items Count</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Hidden Invoice Template for PDF Generation -->
+    <div id="invoice-template-wrapper" style="display: none;">
+        <div id="invoice-template" class="invoice-box">
+            <table cellpadding="0" cellspacing="0" class="invoice-layout-table">
+                <tr class="top">
+                    <td colspan="2">
+                        <table style="width: 100%;">
+                            <tr>
+                                <td class="title">
+                                    <div class="invoice-logo">SB</div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <h2>Sirvi Brothers</h2>
+                                    GSTN: XYZ<br>
+                                    Phone: <span id="inv-company-phone">+91 9999999999</span><br>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                
+                <tr class="information">
+                    <td colspan="2">
+                        <table style="width: 100%;">
+                            <tr>
+                                <td style="width: 50%;">
+                                    <strong>Bill To:</strong><br>
+                                    <span id="inv-buyer-name"></span><br>
+                                    <span id="inv-buyer-mobile"></span><br>
+                                    <span id="inv-buyer-address"></span>
+                                </td>
+                                <td style="text-align: right; width: 50%;">
+                                    <strong>Invoice Details:</strong><br>
+                                    Invoice No.: <span id="inv-number"></span><br>
+                                    Date: <span id="inv-date"></span><br>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <table class="invoice-items" id="inv-items-table" cellspacing="0">
+                <thead>
+                    <tr class="heading">
+                        <th>#</th>
+                        <th style="text-align: left;">Item Name</th>
+                        <th style="text-align: left;">HSN</th>
+                        <th style="text-align: center;">Quantity</th>
+                        <th style="text-align: right;">Price/Unit (₹)</th>
+                        <th style="text-align: right;">Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Items populated here -->
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="5" style="text-align: right; font-weight: bold;">Total Amount:</td>
+                        <td style="text-align: right; font-weight: bold; border-top: 2px solid #ddd;" id="inv-total-amount">₹ 0.00</td>
+                    </tr>
+                    <tr id="inv-paid-row" style="display: none;">
+                        <td colspan="5" style="text-align: right;">Paid Amount:</td>
+                        <td style="text-align: right;" id="inv-paid-amount">₹ 0.00</td>
+                    </tr>
+                    <tr id="inv-due-row" style="display: none;">
+                        <td colspan="5" style="text-align: right; font-weight: bold; color: #d32f2f;">Due Amount:</td>
+                        <td style="text-align: right; font-weight: bold; color: #d32f2f;" id="inv-due-amount">₹ 0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div class="invoice-footer">
+                <div class="amount-words">
+                    <strong>Invoice Amount in Words:</strong><br>
+                    <span id="inv-amount-words"></span> Rupees Only
+                </div>
+                
+                <div class="signatory">
+                    <br><br><br>
+                    <strong>Authorized Signatory</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Modal -->
+    <div id="inventory-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 id="modal-title">Add Inventory Item</h2>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Category</label>
+                <input type="text" id="inv-cat-input" placeholder="e.g. Home Appliances">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Brand</label>
+                <input type="text" id="inv-brand-input" placeholder="e.g. Bajaj">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Variant</label>
+                <input type="text" id="inv-var-input" placeholder="e.g. Ceiling Fan">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>HSN Code</label>
+                <input type="text" id="inv-hsn-input" placeholder="e.g. 8544">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Stock Quantity</label>
+                <input type="number" id="inv-stock-input" value="3" min="0">
+            </div>
+            <input type="hidden" id="inv-id-input">
+            <div class="action-buttons" style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-icon" id="delete-inv-btn" style="display: none; margin-right: auto; border: 1px solid #fee2e2;">
+                    <i class="ph ph-trash"></i> Delete
+                </button>
+                <button class="btn btn-secondary" id="close-modal-btn">Cancel</button>
+                <button class="btn btn-primary" id="save-inv-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Party Modal -->
+    <div id="party-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 id="party-modal-title">Edit Party</h2>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Name</label>
+                <input type="text" id="party-name-input" placeholder="e.g. Acme Corp">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Mobile Number</label>
+                <input type="tel" id="party-mobile-input" placeholder="e.g. 9999999999">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>GSTN</label>
+                <input type="text" id="party-gstn-input" placeholder="e.g. 22AAAAA0000A1Z5">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Address</label>
+                <input type="text" id="party-address-input" placeholder="e.g. 123 Main St">
+            </div>
+            <input type="hidden" id="party-id-input">
+            <div class="action-buttons" style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="close-party-modal-btn">Cancel</button>
+                <button class="btn btn-primary" id="save-party-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div class="modal-overlay" id="payment-modal" style="display: none;">
+        <div class="modal-content">
+            <h2 id="payment-modal-title">Record Payment</h2>
+            <input type="hidden" id="payment-credit-id">
+            <input type="hidden" id="payment-type">
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" id="payment-date">
+            </div>
+            <div class="form-group" id="payment-amount-group">
+                <label>Amount (₹)</label>
+                <input type="number" id="payment-amount" min="1" step="0.01">
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn btn-secondary" id="cancel-payment-btn" style="flex: 1;">Cancel</button>
+                <button class="btn btn-primary" id="save-payment-btn" style="flex: 1;">Save Payment</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Target Date Modal -->
+    <div class="modal-overlay" id="edit-date-modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Edit Target Due Date</h2>
+            <input type="hidden" id="edit-date-credit-id">
+            <div class="form-group">
+                <label>Target Due Date</label>
+                <input type="date" id="edit-target-date">
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn btn-secondary" id="cancel-edit-date-btn" style="flex: 1;">Cancel</button>
+                <button class="btn btn-primary" id="save-edit-date-btn" style="flex: 1;">Save Date</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment History Modal -->
+    <div class="modal-overlay" id="payment-history-modal" style="display: none;">
+        <div class="modal-content" style="width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Payment History</h2>
+                <button class="btn btn-secondary btn-sm" id="close-history-modal-btn"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table" id="payment-history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/inventory.js"></script>
+    <script src="js/pdf-generator.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
