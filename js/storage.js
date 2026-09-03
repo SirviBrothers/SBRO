@@ -125,8 +125,40 @@ class StorageManager {
             *,
             sale_items (*)
         `).order('created_at', { ascending: false });
-        if (error) console.error("Error fetching sales:", error);
-        return data || [];
+        
+        if (error) {
+            console.error("Error fetching sales:", error);
+            return [];
+        }
+        
+        return (data || []).map(s => ({
+            id: s.id,
+            invoiceNo: s.invoice_no,
+            date: s.date,
+            buyerName: s.buyer_name,
+            mobile: s.mobile,
+            address: s.address,
+            gstn: s.gstn,
+            subtotal: s.subtotal,
+            discount: s.discount,
+            grandTotal: s.grand_total,
+            total: s.grand_total,
+            receivedAmt: s.received_amt,
+            dueAmount: s.balance,
+            balance: s.balance,
+            paymentMethod: s.payment_mode,
+            remarks: s.remarks,
+            items: (s.sale_items || []).map(i => ({
+                id: i.id,
+                category: i.category,
+                brand: i.brand,
+                variant: i.variant,
+                qty: i.quantity,
+                unit: i.unit,
+                price: i.price,
+                total: i.total
+            }))
+        }));
     }
 
     static async saveSale(saleData, isEdit = false) {
@@ -268,8 +300,33 @@ class StorageManager {
             *,
             purchase_items (*)
         `).order('created_at', { ascending: false });
-        if (error) console.error("Error fetching purchases:", error);
-        return data || [];
+        
+        if (error) {
+            console.error("Error fetching purchases:", error);
+            return [];
+        }
+        
+        return (data || []).map(p => ({
+            id: p.id,
+            billNo: p.bill_no,
+            date: p.date,
+            vendorName: p.vendor_name,
+            mobile: p.mobile,
+            totalAmount: p.total_amount,
+            total: p.total_amount,
+            paidAmount: p.paid_amount,
+            balance: p.balance,
+            items: (p.purchase_items || []).map(i => ({
+                id: i.id,
+                category: i.category,
+                brand: i.brand,
+                variant: i.variant,
+                qty: i.quantity,
+                unit: i.unit,
+                price: i.price,
+                total: i.total
+            }))
+        }));
     }
 
     static async savePurchase(purchaseData) {
