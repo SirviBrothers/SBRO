@@ -24,9 +24,9 @@ function getHsnForCategory(category) {
     return '';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Inventory on first load if empty
-    let inventory = StorageManager.getInventory();
+    let inventory = await StorageManager.getInventory();
     
     // One-time migration: Apply HSN to existing inventory items if missing
     let updated = false;
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return item;
     });
     if (updated) {
-        localStorage.setItem('sb_inventory_v2', JSON.stringify(inventory));
+        // localStorage.setItem disabled for Supabase
     }
 
     // Set default date
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
     const sidebar = document.querySelector('.sidebar');
     if (sidebarToggleBtn && sidebar) {
-        sidebarToggleBtn.addEventListener('click', () => {
+        sidebarToggleBtn.addEventListener('click', async () => {
             sidebar.classList.toggle('collapsed');
         });
     }
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabPanes = document.querySelectorAll('.tab-pane');
 
     navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
+        item.addEventListener('click', async (e) => {
             e.preventDefault();
             const targetId = item.getAttribute('data-target');
 
@@ -88,9 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- HOME DASHBOARD UI ---
-    function renderHomeDashboard() {
-        const sales = StorageManager.getSales();
-        const credits = StorageManager.getCredits();
+    async function renderHomeDashboard() {
+        const sales = await StorageManager.getSales();
+        const credits = await StorageManager.getCredits();
         
         let todaySales = 0;
         let weeklySales = 0;
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let isPaidAmountManuallyEdited = false;
 
-    paidAmountInput.addEventListener('input', () => {
+    paidAmountInput.addEventListener('input', async () => {
         isPaidAmountManuallyEdited = true;
         recalculateDueAmount();
     });
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const itemsTbody = document.querySelector('#items-table tbody');
 
     function createRow(itemData = null) {
-        const inventory = StorageManager.getInventory();
+        const inventory = await StorageManager.getInventory();
         const categories = [...new Set(inventory.map(i => i.category))];
 
         const tr = document.createElement('tr');
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // Event Listeners for dependent dropdowns
-        catSelect.addEventListener('change', (e) => {
+        catSelect.addEventListener('change', async (e) => {
             const cat = e.target.value;
             brandSelect.innerHTML = `<option value="">Select</option>`;
             varSelect.innerHTML = `<option value="">Select</option>`;
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        brandSelect.addEventListener('change', (e) => {
+        brandSelect.addEventListener('change', async (e) => {
             const cat = catSelect.value;
             const brand = e.target.value;
             varSelect.innerHTML = `<option value="">Select</option>`;
@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        varSelect.addEventListener('change', (e) => {
+        varSelect.addEventListener('change', async (e) => {
             const cat = catSelect.value;
             const brand = brandSelect.value;
             const variant = e.target.value;
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Event listeners for calculations
         [priceInput, qtyInput].forEach(input => {
-            input.addEventListener('input', () => {
+            input.addEventListener('input', async () => {
                 const price = parseFloat(priceInput.value) || 0;
                 const qty = parseInt(qtyInput.value) || 0;
                 
@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemsTbody.appendChild(tr);
     }
 
-    addRowBtn.addEventListener('click', (e) => {
+    addRowBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         createRow();
     });
@@ -320,14 +320,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const buyerHistoryDue = document.getElementById('buyer-history-due');
 
     if (buyerNameInput) {
-        buyerNameInput.addEventListener('input', (e) => {
+        buyerNameInput.addEventListener('input', async (e) => {
             const typedName = e.target.value.toLowerCase().trim();
             if (!typedName) {
                 buyerHistoryContainer.style.display = 'none';
                 return;
             }
 
-            const parties = StorageManager.getParties();
+            const parties = await StorageManager.getParties();
             const party = parties.find(p => p.name.toLowerCase() === typedName);
 
             if (party) {
@@ -336,12 +336,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 buyerAddressInput.value = party.address || '';
 
                 // Fetch history
-                const sales = StorageManager.getSales()
+                const sales = await StorageManager.getSales()
                     .filter(s => s.buyerName.toLowerCase() === typedName)
                     .sort((a, b) => b.id - a.id) // Newest first
                     .slice(0, 3); // Last 3 purchases
 
-                const credits = StorageManager.getCredits().filter(c => c.buyerName.toLowerCase() === typedName);
+                const credits = await StorageManager.getCredits().filter(c => c.buyerName.toLowerCase() === typedName);
                 const totalDue = credits.reduce((sum, c) => {
                     const paid = c.payments.reduce((pSum, p) => pSum + p.amount, 0);
                     return sum + (c.dueAmount - paid);
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (!brand || !variant) valid = false;
 
-                if (!StorageManager.checkStock(cat, brand, variant, qty)) {
+                if (!await StorageManager.checkStock(cat, brand, variant, qty)) {
                     stockError += `\n- Not enough stock for ${brand} (${variant}). Requested: ${qty}`;
                 }
 
@@ -454,14 +454,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Deduct Stock
         if (editingInvoiceNo !== null) {
-            StorageManager.revertSaleStock(editingInvoiceNo);
+            await StorageManager.revertSaleStock(editingInvoiceNo);
         }
 
         items.forEach(item => {
-            StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
+            await StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
         });
 
-        const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : StorageManager.getNextInvoiceNumber();
+        const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNumber();
         const total = totalAmount;
         let paidAmount = parseFloat(paidAmountInput.value);
         if (isNaN(paidAmount)) paidAmount = 0;
@@ -482,17 +482,17 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // Save Data
-        StorageManager.saveSale(billData, editingInvoiceNo !== null);
+        await StorageManager.saveSale(billData, editingInvoiceNo !== null);
 
         if (dueAmount > 0) {
             const dueDate = document.getElementById('due-date').value;
-            StorageManager.saveCredit({
+            await StorageManager.saveCredit({
                 ...billData,
                 total: dueAmount, // Override total for the credit section
                 dueDate
             }, editingInvoiceNo !== null);
         } else if (editingInvoiceNo !== null) {
-            StorageManager.removeCredit(editingInvoiceNo);
+            await StorageManager.removeCredit(editingInvoiceNo);
         }
         
         editingInvoiceNo = null;
@@ -516,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save Bill Button
     const saveBtn = document.getElementById('save-bill-btn');
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', async () => {
         const billData = processBillData();
         if (billData) {
             resetForm();
@@ -577,8 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Render Sales Table
-    function renderSalesTable() {
-        const sales = StorageManager.getSales();
+    async function renderSalesTable() {
+        const sales = await StorageManager.getSales();
         const tbody = document.querySelector('#sales-history-table tbody');
         tbody.innerHTML = '';
         
@@ -618,7 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.share-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
                     const originalHtml = btn.innerHTML;
@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.download-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
                     const originalHtml = btn.innerHTML;
@@ -670,9 +670,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.wa-share-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     let itemsText = sale.items.map((i, idx) => `${idx + 1}. ${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.amount.toFixed(2)}`).join('\n');
                     
@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.edit-sale-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
                 loadBillIntoForm(invoiceNo);
             });
@@ -716,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBillIntoForm(invoiceNo) {
-        const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+        const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
         if (!sale) return;
 
         // Switch to billing tab
@@ -742,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateGrandTotal();
 
         if (sale.dueAmount > 0) {
-            const credit = StorageManager.getCredits().find(c => c.invoiceNo === invoiceNo);
+            const credit = await StorageManager.getCredits().find(c => c.invoiceNo === invoiceNo);
             if (credit && credit.dueDate) {
                 document.getElementById('due-date').value = credit.dueDate;
             }
@@ -750,8 +750,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Render Credit Table
-    function renderCreditTable() {
-        const credits = StorageManager.getCredits();
+    async function renderCreditTable() {
+        const credits = await StorageManager.getCredits();
         const tbody = document.querySelector('#credit-history-table tbody');
         tbody.innerHTML = '';
 
@@ -761,7 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Auto update status if math shows paid but status doesn't
             if (remaining <= 0 && credit.status !== 'Paid') {
-                StorageManager.updateCreditStatus(credit.id, 'Paid');
+                await StorageManager.updateCreditStatus(credit.id, 'Paid');
                 credit.status = 'Paid';
             }
 
@@ -786,7 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.mark-paid-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.target.dataset.id);
                 document.getElementById('payment-modal-title').textContent = 'Mark as Fully Paid';
                 document.getElementById('payment-credit-id').value = id;
@@ -798,7 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.part-pay-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.target.dataset.id);
                 document.getElementById('payment-modal-title').textContent = 'Record Part Payment';
                 document.getElementById('payment-credit-id').value = id;
@@ -811,9 +811,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.edit-date-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const credit = StorageManager.getCredits().find(c => c.id === id);
+                const credit = await StorageManager.getCredits().find(c => c.id === id);
                 if (credit) {
                     document.getElementById('edit-date-credit-id').value = id;
                     document.getElementById('edit-target-date').value = credit.dueDate;
@@ -823,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.view-history-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
                 renderPaymentHistory(id);
                 document.getElementById('payment-history-modal').style.display = 'flex';
@@ -834,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderPaymentHistory(creditId) {
-        const credit = StorageManager.getCredits().find(c => c.id === creditId);
+        const credit = await StorageManager.getCredits().find(c => c.id === creditId);
         const tbody = document.querySelector('#payment-history-table tbody');
         tbody.innerHTML = '';
         
@@ -856,11 +856,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.querySelectorAll('.delete-payment-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 if (confirm('Are you sure you want to delete this payment?')) {
                     const cId = parseInt(e.currentTarget.dataset.creditId);
                     const pIdx = parseInt(e.currentTarget.dataset.index);
-                    StorageManager.removePaymentFromCredit(cId, pIdx);
+                    await StorageManager.removePaymentFromCredit(cId, pIdx);
                     renderPaymentHistory(cId);
                     renderCreditTable();
                     renderHomeDashboard();
@@ -871,7 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- PARTIES DATALIST ---
     function updatePartiesDatalist() {
-        const parties = StorageManager.getParties();
+        const parties = await StorageManager.getParties();
         const datalist = document.getElementById('parties-list');
         if (datalist) {
             datalist.innerHTML = '';
@@ -892,21 +892,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const vendorHistoryList = document.getElementById('vendor-history-list');
 
     if (purchaseVendorNameInput) {
-        purchaseVendorNameInput.addEventListener('input', (e) => {
+        purchaseVendorNameInput.addEventListener('input', async (e) => {
             const typedName = e.target.value.toLowerCase().trim();
             if (!typedName) {
                 vendorHistoryContainer.style.display = 'none';
                 return;
             }
 
-            const parties = StorageManager.getParties();
+            const parties = await StorageManager.getParties();
             const party = parties.find(p => p.name.toLowerCase() === typedName);
 
             if (party) {
                 purchaseVendorMobileInput.value = party.mobile || '';
 
                 // Fetch past purchases from this vendor
-                const purchases = StorageManager.getPurchases()
+                const purchases = await StorageManager.getPurchases()
                     .filter(p => p.vendorName.toLowerCase() === typedName)
                     .sort((a, b) => b.id - a.id) // Newest first
                     .slice(0, 3); // Last 3 purchases
@@ -934,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function createPurchaseRow() {
         purchaseItemsCount++;
-        const inventory = StorageManager.getInventory();
+        const inventory = await StorageManager.getInventory();
         const categories = [...new Set(inventory.map(i => i.category))];
 
         const tr = document.createElement('tr');
@@ -979,7 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let tdAction = document.createElement('td'); tdAction.appendChild(removeBtn); tr.appendChild(tdAction);
 
         // Event Listeners for cascading
-        catSelect.addEventListener('change', (e) => {
+        catSelect.addEventListener('change', async (e) => {
             const cat = e.target.value;
             brandSelect.innerHTML = `<option value="">Select</option>`;
             varSelect.innerHTML = `<option value="">Select</option>`;
@@ -991,7 +991,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        brandSelect.addEventListener('change', (e) => {
+        brandSelect.addEventListener('change', async (e) => {
             const cat = catSelect.value;
             const brand = e.target.value;
             varSelect.innerHTML = `<option value="">Select</option>`;
@@ -1003,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        varSelect.addEventListener('change', (e) => {
+        varSelect.addEventListener('change', async (e) => {
             const cat = catSelect.value;
             const brand = brandSelect.value;
             const variant = e.target.value;
@@ -1026,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qtyInput.addEventListener('input', calcAmount);
         priceInput.addEventListener('input', calcAmount);
         
-        removeBtn.addEventListener('click', () => {
+        removeBtn.addEventListener('click', async () => {
             tr.remove();
             calculatePurchaseTotal();
         });
@@ -1048,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const addPurchaseRowBtn = document.getElementById('add-purchase-row-btn');
     if (addPurchaseRowBtn) {
-        addPurchaseRowBtn.addEventListener('click', (e) => {
+        addPurchaseRowBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             createPurchaseRow();
         });
@@ -1058,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const savePurchaseBtn = document.getElementById('save-purchase-btn');
     if (savePurchaseBtn) {
-        savePurchaseBtn.addEventListener('click', () => {
+        savePurchaseBtn.addEventListener('click', async () => {
             const vendorName = document.getElementById('purchase-vendor-name').value;
             const date = document.getElementById('purchase-date').value;
             
@@ -1088,7 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const totalAmount = calculatePurchaseTotal();
             
-            StorageManager.savePurchase({
+            await StorageManager.savePurchase({
                 vendorName,
                 date,
                 mobile: document.getElementById('purchase-vendor-mobile').value || '',
@@ -1112,12 +1112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderPurchaseHistoryTable() {
+    async function renderPurchaseHistoryTable() {
         const tbody = document.querySelector('#purchase-history-table tbody');
         if (!tbody) return;
         
         tbody.innerHTML = '';
-        const purchases = StorageManager.getPurchases().reverse(); // Newest first
+        const purchases = await StorageManager.getPurchases().reverse(); // Newest first
 
         if (purchases.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No purchases found.</td></tr>';
@@ -1145,7 +1145,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     document.querySelectorAll('#inventory-filters .filter-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             document.querySelectorAll('#inventory-filters .filter-btn').forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
             currentInventoryFilter = e.currentTarget.dataset.filter;
@@ -1153,8 +1153,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    function renderInventoryTable() {
-        let inventory = StorageManager.getInventory();
+    async function renderInventoryTable() {
+        let inventory = await StorageManager.getInventory();
         
         if (currentInventoryFilter !== 'all') {
             inventory = inventory.filter(item => {
@@ -1280,9 +1280,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Add event listeners for editing stock cells
         document.querySelectorAll('.stock-cell').forEach(cell => {
-            cell.addEventListener('click', (e) => {
+            cell.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const item = StorageManager.getInventory().find(i => i.id === id);
+                const item = await StorageManager.getInventory().find(i => i.id === id);
                 if (item) {
                     document.getElementById('modal-title').textContent = 'Edit Inventory Item';
                     document.getElementById('inv-id-input').value = item.id;
@@ -1303,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    addInvBtn.addEventListener('click', () => {
+    addInvBtn.addEventListener('click', async () => {
         document.getElementById('modal-title').textContent = 'Add Inventory Item';
         document.getElementById('inv-id-input').value = '';
         document.getElementById('inv-cat-input').value = '';
@@ -1320,20 +1320,20 @@ document.addEventListener('DOMContentLoaded', () => {
         inventoryModal.style.display = 'flex';
     });
     
-    document.getElementById('delete-inv-btn').addEventListener('click', () => {
+    document.getElementById('delete-inv-btn').addEventListener('click', async () => {
         const id = document.getElementById('inv-id-input').value;
         if (id && confirm('Are you sure you want to delete this item?')) {
-            StorageManager.deleteInventoryItem(parseInt(id));
+            await StorageManager.deleteInventoryItem(parseInt(id));
             inventoryModal.style.display = 'none';
             renderInventoryTable();
         }
     });
 
-    closeBtn.addEventListener('click', () => {
+    closeBtn.addEventListener('click', async () => {
         inventoryModal.style.display = 'none';
     });
 
-    saveInvBtn.addEventListener('click', () => {
+    saveInvBtn.addEventListener('click', async () => {
         const id = document.getElementById('inv-id-input').value;
         const category = document.getElementById('inv-cat-input').value.trim();
         const brand = document.getElementById('inv-brand-input').value.trim();
@@ -1352,7 +1352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         if (id) itemData.id = parseInt(id);
 
-        StorageManager.saveInventoryItem(itemData);
+        await StorageManager.saveInventoryItem(itemData);
         inventoryModal.style.display = 'none';
         renderInventoryTable();
 
@@ -1364,10 +1364,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- PARTIES / CUSTOMERS UI ---
     let currentSortByDue = false;
     
-    function renderPartiesTable() {
-        const parties = StorageManager.getParties();
-        const sales = StorageManager.getSales();
-        const credits = StorageManager.getCredits();
+    async function renderPartiesTable() {
+        const parties = await StorageManager.getParties();
+        const sales = await StorageManager.getSales();
+        const credits = await StorageManager.getCredits();
         const tbody = document.querySelector('#parties-table tbody');
         if (!tbody) return;
         
@@ -1410,9 +1410,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         document.querySelectorAll('.edit-party-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const party = StorageManager.getParties().find(p => p.id === id);
+                const party = await StorageManager.getParties().find(p => p.id === id);
                 if (party) {
                     document.getElementById('party-modal-title').textContent = 'Edit Customer';
                     document.getElementById('party-id-input').value = party.id;
@@ -1429,7 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const sortDueBtn = document.getElementById('sort-due-btn');
     if (sortDueBtn) {
-        sortDueBtn.addEventListener('click', () => {
+        sortDueBtn.addEventListener('click', async () => {
             currentSortByDue = !currentSortByDue;
             if (currentSortByDue) {
                 sortDueBtn.classList.add('btn-primary');
@@ -1447,13 +1447,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const savePartyBtn = document.getElementById('save-party-btn');
 
     if (closePartyBtn) {
-        closePartyBtn.addEventListener('click', () => {
+        closePartyBtn.addEventListener('click', async () => {
             partyModal.style.display = 'none';
         });
     }
 
     if (savePartyBtn) {
-        savePartyBtn.addEventListener('click', () => {
+        savePartyBtn.addEventListener('click', async () => {
             const id = document.getElementById('party-id-input').value;
             const name = document.getElementById('party-name-input').value.trim();
             const mobile = document.getElementById('party-mobile-input').value.trim();
@@ -1465,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            StorageManager.saveParty({
+            await StorageManager.saveParty({
                 id: id ? parseInt(id) : undefined,
                 name,
                 mobile,
@@ -1480,7 +1480,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const addPartyBtn = document.getElementById('add-party-btn');
     if (addPartyBtn) {
-        addPartyBtn.addEventListener('click', () => {
+        addPartyBtn.addEventListener('click', async () => {
             document.getElementById('party-modal-title').textContent = 'Add New Customer';
             document.getElementById('party-id-input').value = '';
             document.getElementById('party-name-input').value = '';
@@ -1493,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- PASSBOOK & MODALS LOGIC ---
     function renderPassbook() {
-        const credits = StorageManager.getCredits();
+        const credits = await StorageManager.getCredits();
         const tbody = document.querySelector('#passbook-table tbody');
         if(!tbody) return;
         tbody.innerHTML = '';
@@ -1552,11 +1552,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Payment Modal Actions
-    document.getElementById('cancel-payment-btn')?.addEventListener('click', () => {
+    document.getElementById('cancel-payment-btn')?.addEventListener('click', async () => {
         document.getElementById('payment-modal').style.display = 'none';
     });
 
-    document.getElementById('save-payment-btn')?.addEventListener('click', () => {
+    document.getElementById('save-payment-btn')?.addEventListener('click', async () => {
         const id = parseInt(document.getElementById('payment-credit-id').value);
         const type = document.getElementById('payment-type').value;
         const date = document.getElementById('payment-date').value;
@@ -1567,14 +1567,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (type === 'full') {
-            StorageManager.markCreditAsPaid(id, date);
+            await StorageManager.markCreditAsPaid(id, date);
         } else if (type === 'part') {
             const amount = parseFloat(document.getElementById('payment-amount').value);
             if (isNaN(amount) || amount <= 0) {
                 alert('Please enter a valid amount.');
                 return;
             }
-            StorageManager.addPaymentToCredit(id, amount, date);
+            await StorageManager.addPaymentToCredit(id, amount, date);
         }
         
         document.getElementById('payment-modal').style.display = 'none';
@@ -1583,11 +1583,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Edit Date Modal Actions
-    document.getElementById('cancel-edit-date-btn')?.addEventListener('click', () => {
+    document.getElementById('cancel-edit-date-btn')?.addEventListener('click', async () => {
         document.getElementById('edit-date-modal').style.display = 'none';
     });
 
-    document.getElementById('save-edit-date-btn')?.addEventListener('click', () => {
+    document.getElementById('save-edit-date-btn')?.addEventListener('click', async () => {
         const id = parseInt(document.getElementById('edit-date-credit-id').value);
         const newDate = document.getElementById('edit-target-date').value;
         
@@ -1596,12 +1596,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        StorageManager.updateCreditDueDate(id, newDate);
+        await StorageManager.updateCreditDueDate(id, newDate);
         document.getElementById('edit-date-modal').style.display = 'none';
         renderCreditTable();
     });
 
-    document.getElementById('close-history-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('close-history-modal-btn')?.addEventListener('click', async () => {
         document.getElementById('payment-history-modal').style.display = 'none';
     });
 

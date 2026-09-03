@@ -1,321 +1,273 @@
-// Simple wrapper for LocalStorage to manage Sales and Credit data
-
-const STORAGE_KEYS = {
-    SALES: 'sb_sales_history',
-    CREDITS: 'sb_credit_history',
-    INVOICE_SEQ: 'sb_invoice_sequence',
-    INVENTORY: 'sb_inventory_v2',
-    PARTIES: 'sb_parties',
-    PURCHASES: 'sb_purchases_history'
-};
+// Supabase Cloud Storage Manager
+// Completely replaces localStorage with Supabase async calls
 
 class StorageManager {
-    static getParties() {
-        const data = localStorage.getItem(STORAGE_KEYS.PARTIES);
-        return data ? JSON.parse(data) : [];
+    static get client() {
+        if (!window.supabaseClient) {
+            console.error("Supabase client not initialized.");
+        }
+        return window.supabaseClient;
     }
 
-    static saveParty(partyData) {
-        const parties = this.getParties();
+    // ==========================================
+    // PARTIES (Customers / Vendors)
+    // ==========================================
+    static async getParties() {
+        const { data, error } = await this.client.from('parties').select('*').order('created_at', { ascending: false });
+        if (error) console.error("Error fetching parties:", error);
+        return data || [];
+    }
+
+    static async saveParty(partyData) {
         if (partyData.id) {
-            const index = parties.findIndex(p => p.id === partyData.id);
-            if (index !== -1) {
-                parties[index] = { ...parties[index], ...partyData };
-            }
+            const { error } = await this.client.from('parties').update({
+                name: partyData.name,
+                mobile: partyData.mobile,
+                address: partyData.address,
+                gstn: partyData.gstn
+            }).eq('id', partyData.id);
+            if (error) console.error("Error updating party:", error);
         } else {
-            const newId = parties.length > 0 ? Math.max(...parties.map(p => p.id)) + 1 : 1;
-            parties.push({ ...partyData, id: newId });
+            const { error } = await this.client.from('parties').insert([{
+                name: partyData.name,
+                mobile: partyData.mobile,
+                address: partyData.address,
+                gstn: partyData.gstn
+            }]);
+            if (error) console.error("Error creating party:", error);
         }
-        localStorage.setItem(STORAGE_KEYS.PARTIES, JSON.stringify(parties));
     }
 
-    static deleteParty(id) {
-        let parties = this.getParties();
-        parties = parties.filter(p => p.id !== id);
-        localStorage.setItem(STORAGE_KEYS.PARTIES, JSON.stringify(parties));
+    static async deleteParty(id) {
+        const { error } = await this.client.from('parties').delete().eq('id', id);
+        if (error) console.error("Error deleting party:", error);
     }
 
-    static autoRegisterParty(name, mobile, address, gstn) {
+    static async autoRegisterParty(name, mobile, address, gstn) {
         if (!name) return;
-        const parties = this.getParties();
-        const existingParty = parties.find(p => 
-            (mobile && p.mobile === mobile) || 
-            p.name.toLowerCase() === name.toLowerCase()
-        );
-        
-        if (!existingParty) {
-            this.saveParty({
-                name: name,
-                mobile: mobile || '',
-                address: address || '',
-                gstn: gstn || ''
-            });
+        const { data: existing } = await this.client.from('parties').select('*')
+            .or(`mobile.eq.${mobile},name.ilike.${name}`)
+            .limit(1);
+
+        if (!existing || existing.length === 0) {
+            await this.saveParty({ name, mobile: mobile || '', address: address || '', gstn: gstn || '' });
         } else {
+            const p = existing[0];
             let updated = false;
-            if (gstn && !existingParty.gstn) { existingParty.gstn = gstn; updated = true; }
-            if (mobile && !existingParty.mobile) { existingParty.mobile = mobile; updated = true; }
-            if (address && !existingParty.address) { existingParty.address = address; updated = true; }
-            if (updated) this.saveParty(existingParty);
+            if (gstn && !p.gstn) { p.gstn = gstn; updated = true; }
+            if (mobile && !p.mobile) { p.mobile = mobile; updated = true; }
+            if (address && !p.address) { p.address = address; updated = true; }
+            if (updated) await this.saveParty(p);
         }
     }
 
-    static getSales() {
-        const data = localStorage.getItem(STORAGE_KEYS.SALES);
-        return data ? JSON.parse(data) : [];
+    // ==========================================
+    // INVENTORY
+    // ==========================================
+    static async getInventory() {
+        const { data, error } = await this.client.from('inventory').select('*').order('category', { ascending: true });
+        if (error) console.error("Error fetching inventory:", error);
+        return data || [];
     }
 
-    static saveSale(saleData, isEdit = false) {
-        let sales = this.getSales();
-        if (isEdit) {
-            const index = sales.findIndex(s => s.invoiceNo === saleData.invoiceNo);
-            if (index !== -1) {
-                sales[index] = { ...sales[index], ...saleData };
-            } else {
-                sales.push({ ...saleData, id: Date.now() });
-            }
-        } else {
-            sales.push({ ...saleData, id: Date.now() });
-        }
-        localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
-        
-        this.autoRegisterParty(saleData.buyerName, saleData.mobile, saleData.address, saleData.gstn);
-    }
-
-    static getPurchases() {
-        const data = localStorage.getItem(STORAGE_KEYS.PURCHASES);
-        return data ? JSON.parse(data) : [];
-    }
-
-    static savePurchase(purchaseData) {
-        let purchases = this.getPurchases();
-        purchases.push({ ...purchaseData, id: Date.now() });
-        localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
-
-        this.autoRegisterParty(purchaseData.vendorName, purchaseData.mobile, '', '');
-
-        // Update Inventory Stock
-        let inventory = this.getInventory();
-        purchaseData.items.forEach(item => {
-            const index = inventory.findIndex(i => i.category === item.category && i.brand === item.brand && i.variant === item.variant);
-            if (index !== -1) {
-                inventory[index].stock += item.qty;
-                // Optionally update cost price here if needed: inventory[index].price = item.price
-            } else {
-                // If it's a completely new item, we add it to inventory
-                inventory.push({
-                    id: Date.now() + Math.random(),
-                    category: item.category,
-                    brand: item.brand,
-                    variant: item.variant,
-                    stock: item.qty,
-                    price: item.price // Assuming this is selling price or cost price based on context
-                });
-            }
-        });
-        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
-    }
-
-    static getCredits() {
-        const data = localStorage.getItem(STORAGE_KEYS.CREDITS);
-        const credits = data ? JSON.parse(data) : [];
-        credits.forEach(c => {
-            if (!c.payments) c.payments = [];
-        });
-        return credits;
-    }
-
-    static saveCredit(creditData, isEdit = false) {
-        let credits = this.getCredits();
-        if (!creditData.payments) creditData.payments = [];
-        
-        if (isEdit) {
-            const index = credits.findIndex(c => c.invoiceNo === creditData.invoiceNo);
-            if (index !== -1) {
-                credits[index] = { ...credits[index], ...creditData };
-            } else {
-                credits.push({ ...creditData, id: Date.now(), status: 'Pending' });
-            }
-        } else {
-            credits.push({ ...creditData, id: Date.now(), status: 'Pending' });
-        }
-        localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-    }
-
-    static removeCredit(invoiceNo) {
-        let credits = this.getCredits();
-        credits = credits.filter(c => c.invoiceNo !== invoiceNo);
-        localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-    }
-
-    static updateCreditStatus(id, newStatus) {
-        const credits = this.getCredits();
-        const index = credits.findIndex(c => c.id === id);
-        if (index !== -1) {
-            credits[index].status = newStatus;
-            localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-        }
-    }
-
-    static addPaymentToCredit(id, paymentAmount, paymentDate) {
-        const credits = this.getCredits();
-        const index = credits.findIndex(c => c.id === id);
-        if (index !== -1) {
-            credits[index].payments.push({
-                amount: parseFloat(paymentAmount),
-                date: paymentDate
-            });
-            const totalPaid = credits[index].payments.reduce((sum, p) => sum + p.amount, 0);
-            if (totalPaid >= credits[index].total) {
-                credits[index].status = 'Paid';
-            }
-            localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-        }
-    }
-
-    static markCreditAsPaid(id, paymentDate) {
-        const credits = this.getCredits();
-        const index = credits.findIndex(c => c.id === id);
-        if (index !== -1) {
-            const totalPaid = credits[index].payments.reduce((sum, p) => sum + p.amount, 0);
-            const remaining = credits[index].total - totalPaid;
-            if (remaining > 0) {
-                credits[index].payments.push({
-                    amount: remaining,
-                    date: paymentDate
-                });
-            }
-            credits[index].status = 'Paid';
-            localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-        }
-    }
-
-    static updateCreditDueDate(id, newDueDate) {
-        const credits = this.getCredits();
-        const index = credits.findIndex(c => c.id === id);
-        if (index !== -1) {
-            credits[index].dueDate = newDueDate;
-            localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-        }
-    }
-
-    static removePaymentFromCredit(creditId, paymentIndex) {
-        const credits = this.getCredits();
-        const index = credits.findIndex(c => c.id === creditId);
-        if (index !== -1 && credits[index].payments) {
-            credits[index].payments.splice(paymentIndex, 1);
-            
-            // Recalculate status
-            const totalPaid = credits[index].payments.reduce((sum, p) => sum + p.amount, 0);
-            if (totalPaid < credits[index].total) {
-                credits[index].status = 'Pending';
-            }
-            
-            localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
-        }
-    }
-
-    static getNextInvoiceNumber() {
-        let seq = localStorage.getItem(STORAGE_KEYS.INVOICE_SEQ);
-        if (!seq) {
-            seq = 1;
-        } else {
-            seq = parseInt(seq) + 1;
-        }
-        localStorage.setItem(STORAGE_KEYS.INVOICE_SEQ, seq);
-        return seq;
-    }
-
-    // --- Inventory Management ---
-    static getInventory() {
-        const data = localStorage.getItem(STORAGE_KEYS.INVENTORY);
-        if (!data) {
-            return this.initInventory();
-        }
-        return JSON.parse(data);
-    }
-
-    static initInventory() {
-        // Flatten the INVENTORY constant from inventory.js to a list of items
-        const flatInventory = [];
-        let idCounter = 1;
-
-        if (typeof INVENTORY !== 'undefined') {
-            for (const cat in INVENTORY) {
-                const brands = INVENTORY[cat].brands;
-                const variants = INVENTORY[cat].variants;
-                
-                brands.forEach(brand => {
-                    variants.forEach(variant => {
-                        flatInventory.push({
-                            id: idCounter++,
-                            category: cat,
-                            brand: brand,
-                            variant: variant,
-                            stock: 3
-                        });
-                    });
-                });
-            }
-        }
-        
-        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(flatInventory));
-        return flatInventory;
-    }
-
-    static saveInventoryItem(itemData) {
-        const inventory = this.getInventory();
+    static async saveInventoryItem(itemData) {
         if (itemData.id) {
-            // Update existing
-            const index = inventory.findIndex(i => i.id == itemData.id);
-            if (index !== -1) {
-                inventory[index] = { ...inventory[index], ...itemData };
-            }
+            const { error } = await this.client.from('inventory').update({
+                category: itemData.category,
+                brand: itemData.brand,
+                variant: itemData.variant,
+                quantity: parseFloat(itemData.quantity) || 0,
+                unit: itemData.unit,
+                price: parseFloat(itemData.price) || 0,
+                min_stock: parseFloat(itemData.minStock) || 0
+            }).eq('id', itemData.id);
+            if (error) console.error("Error updating inventory:", error);
         } else {
-            // Add new
-            const newId = inventory.length > 0 ? Math.max(...inventory.map(i => i.id)) + 1 : 1;
-            inventory.push({ ...itemData, id: newId });
-        }
-        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
-    }
-
-    static deleteInventoryItem(id) {
-        let inventory = this.getInventory();
-        inventory = inventory.filter(i => i.id != id);
-        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
-    }
-
-    static checkStock(category, brand, variant, qty) {
-        const inventory = this.getInventory();
-        const item = inventory.find(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (!item) return false;
-        return item.stock >= qty;
-    }
-
-    static deductStock(category, brand, variant, qty) {
-        const inventory = this.getInventory();
-        const index = inventory.findIndex(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (index !== -1) {
-            inventory[index].stock -= qty;
-            localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
+            const { error } = await this.client.from('inventory').insert([{
+                category: itemData.category,
+                brand: itemData.brand,
+                variant: itemData.variant,
+                quantity: parseFloat(itemData.quantity) || 0,
+                unit: itemData.unit,
+                price: parseFloat(itemData.price) || 0,
+                min_stock: parseFloat(itemData.minStock) || 0
+            }]);
+            if (error) console.error("Error creating inventory:", error);
         }
     }
 
-    static addStock(category, brand, variant, qty) {
-        const inventory = this.getInventory();
-        const index = inventory.findIndex(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (index !== -1) {
-            inventory[index].stock += qty;
-            localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
-        }
+    static async deleteInventoryItem(id) {
+        const { error } = await this.client.from('inventory').delete().eq('id', id);
+        if (error) console.error("Error deleting inventory:", error);
     }
 
-    static revertSaleStock(invoiceNo) {
-        const sales = this.getSales();
-        const sale = sales.find(s => s.invoiceNo === invoiceNo);
-        if (sale && sale.items) {
-            sale.items.forEach(item => {
-                this.addStock(item.category, item.brand, item.variant, item.qty);
-            });
+    // ==========================================
+    // SALES / BILLS
+    // ==========================================
+    
+    static async getCredits() {
+        const sales = await this.getSales();
+        return sales.filter(s => s.balance > 0);
+    }
+    
+    static async getSales() {
+        // Fetch sales with their nested items
+        const { data, error } = await this.client.from('sales').select(`
+            *,
+            sale_items (*)
+        `).order('created_at', { ascending: false });
+        if (error) console.error("Error fetching sales:", error);
+        return data || [];
+    }
+
+    static async saveSale(saleData, isEdit = false) {
+        let saleId = saleData.id;
+
+        if (isEdit && saleId) {
+            const { error } = await this.client.from('sales').update({
+                date: saleData.date,
+                buyer_name: saleData.buyerName,
+                mobile: saleData.mobile,
+                address: saleData.address,
+                gstn: saleData.gstn,
+                subtotal: saleData.subtotal,
+                discount: saleData.discount,
+                grand_total: saleData.grandTotal,
+                received_amt: saleData.receivedAmt,
+                balance: saleData.balance,
+                payment_mode: saleData.paymentMode,
+                remarks: saleData.remarks
+            }).eq('id', saleId);
+            
+            // Delete old items and insert new ones
+            await this.client.from('sale_items').delete().eq('sale_id', saleId);
+        } else {
+            const { data, error } = await this.client.from('sales').insert([{
+                invoice_no: saleData.invoiceNo,
+                date: saleData.date,
+                buyer_name: saleData.buyerName,
+                mobile: saleData.mobile,
+                address: saleData.address,
+                gstn: saleData.gstn,
+                subtotal: saleData.subtotal,
+                discount: saleData.discount,
+                grand_total: saleData.grandTotal,
+                received_amt: saleData.receivedAmt,
+                balance: saleData.balance,
+                payment_mode: saleData.paymentMode,
+                remarks: saleData.remarks
+            }]).select();
+            
+            if (error) {
+                console.error("Error creating sale:", error);
+                return;
+            }
+            saleId = data[0].id;
         }
+
+        // Insert sale items
+        if (saleData.items && saleData.items.length > 0) {
+            const itemsToInsert = saleData.items.map(item => ({
+                sale_id: saleId,
+                category: item.category,
+                brand: item.brand,
+                variant: item.variant,
+                quantity: item.qty,
+                unit: item.unit,
+                price: item.price,
+                total: item.total
+            }));
+            await this.client.from('sale_items').insert(itemsToInsert);
+        }
+
+        await this.autoRegisterParty(saleData.buyerName, saleData.mobile, saleData.address, saleData.gstn);
+    }
+
+    static async getNextInvoiceNo() {
+        const { data, error } = await this.client.from('sales')
+            .select('invoice_no')
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+        if (data && data.length > 0) {
+            const lastNo = data[0].invoice_no;
+            const match = lastNo.match(/\d+$/);
+            if (match) {
+                const nextNum = parseInt(match[0]) + 1;
+                return `INV-${new Date().getFullYear()}-${String(nextNum).padStart(4, '0')}`;
+            }
+        }
+        return `INV-${new Date().getFullYear()}-0001`;
+    }
+
+    // ==========================================
+    // PURCHASES
+    // ==========================================
+    static async getPurchases() {
+        const { data, error } = await this.client.from('purchases').select(`
+            *,
+            purchase_items (*)
+        `).order('created_at', { ascending: false });
+        if (error) console.error("Error fetching purchases:", error);
+        return data || [];
+    }
+
+    static async savePurchase(purchaseData) {
+        const { data, error } = await this.client.from('purchases').insert([{
+            bill_no: purchaseData.billNo,
+            date: purchaseData.date,
+            vendor_name: purchaseData.vendorName,
+            mobile: purchaseData.mobile,
+            total_amount: purchaseData.totalAmount,
+            paid_amount: purchaseData.paidAmount,
+            balance: purchaseData.balance
+        }]).select();
+
+        if (error) {
+            console.error("Error saving purchase:", error);
+            return;
+        }
+        const purchaseId = data[0].id;
+
+        if (purchaseData.items && purchaseData.items.length > 0) {
+            const itemsToInsert = purchaseData.items.map(item => ({
+                purchase_id: purchaseId,
+                category: item.category,
+                brand: item.brand,
+                variant: item.variant,
+                quantity: item.qty,
+                unit: item.unit,
+                price: item.price,
+                total: item.total
+            }));
+            await this.client.from('purchase_items').insert(itemsToInsert);
+
+            // Update inventory quantities
+            const inventory = await this.getInventory();
+            for (let item of purchaseData.items) {
+                const existing = inventory.find(i => 
+                    i.category === item.category && 
+                    i.brand === item.brand && 
+                    i.variant === item.variant
+                );
+                if (existing) {
+                    await this.client.from('inventory').update({
+                        quantity: existing.quantity + parseFloat(item.qty)
+                    }).eq('id', existing.id);
+                } else {
+                    await this.client.from('inventory').insert([{
+                        category: item.category,
+                        brand: item.brand,
+                        variant: item.variant,
+                        quantity: item.qty,
+                        unit: item.unit,
+                        price: item.price,
+                        min_stock: 0
+                    }]);
+                }
+            }
+        }
+
+        await this.autoRegisterParty(purchaseData.vendorName, purchaseData.mobile, '', '');
     }
 }
