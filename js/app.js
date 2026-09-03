@@ -1216,12 +1216,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (currentInventoryFilter !== 'all') {
             inventory = inventory.filter(item => {
-                if (currentInventoryFilter === '0') return item.stock === 0;
-                if (currentInventoryFilter === '1-3') return item.stock >= 1 && item.stock <= 3;
-                if (currentInventoryFilter === '4-10') return item.stock >= 4 && item.stock <= 10;
-                if (currentInventoryFilter === '11-30') return item.stock >= 11 && item.stock <= 30;
-                if (currentInventoryFilter === '31-50') return item.stock >= 31 && item.stock <= 50;
-                if (currentInventoryFilter === '51-100') return item.stock >= 51 && item.stock <= 100;
+                if (currentInventoryFilter === '0') return item.quantity === 0;
+                if (currentInventoryFilter === '1-3') return item.quantity >= 1 && item.quantity <= 3;
+                if (currentInventoryFilter === '4-10') return item.quantity >= 4 && item.quantity <= 10;
+                if (currentInventoryFilter === '11-30') return item.quantity >= 11 && item.quantity <= 30;
+                if (currentInventoryFilter === '31-50') return item.quantity >= 31 && item.quantity <= 50;
+                if (currentInventoryFilter === '51-100') return item.quantity >= 51 && item.quantity <= 100;
                 return true;
             });
         }
@@ -1311,12 +1311,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     if (item) {
                         let stockColor = '#10B981'; // Green
-                        if (item.stock < 10) stockColor = '#EF4444'; // Red
-                        else if (item.stock <= 30) stockColor = '#F59E0B'; // Orange
+                        if (item.quantity < 10) stockColor = '#EF4444'; // Red
+                        else if (item.quantity <= 30) stockColor = '#F59E0B'; // Orange
                         
                         td.innerHTML = `
                             <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span style="color: ${stockColor}; font-weight: bold; font-size: 1.1em;">${item.stock}</span>
+                                <span style="color: ${stockColor}; font-weight: bold; font-size: 1.1em;">${item.quantity}</span>
                                 <button class="btn btn-icon stock-cell" data-id="${item.id}" title="Edit Item" style="padding: 0.25rem; font-size: 0.9rem; border: 1px solid #E5E7EB; border-radius: 4px; background: #fff;">
                                     <i class="ph ph-pencil"></i>
                                 </button>
@@ -1348,7 +1348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById('inv-brand-input').value = item.brand;
                     document.getElementById('inv-var-input').value = item.variant;
                     document.getElementById('inv-hsn-input').value = item.hsn || getHsnForCategory(item.category);
-                    document.getElementById('inv-stock-input').value = item.stock;
+                    document.getElementById('inv-stock-input').value = item.quantity;
                     
                     document.getElementById('inv-cat-input').disabled = true;
                     document.getElementById('inv-brand-input').disabled = true;
@@ -1381,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('delete-inv-btn').addEventListener('click', async () => {
         const id = document.getElementById('inv-id-input').value;
         if (id && confirm('Are you sure you want to delete this item?')) {
-            await StorageManager.deleteInventoryItem(parseInt(id));
+            await StorageManager.deleteInventoryItem(id);
             inventoryModal.style.display = 'none';
             renderInventoryTable();
         }
@@ -1406,9 +1406,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!hsn) hsn = getHsnForCategory(category);
 
         const itemData = {
-            category, brand, variant, hsn, stock
+            category, brand, variant, hsn, quantity: stock
         };
-        if (id) itemData.id = parseInt(id);
+        if (id) itemData.id = id;
 
         await StorageManager.saveInventoryItem(itemData);
         inventoryModal.style.display = 'none';
