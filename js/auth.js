@@ -3,10 +3,10 @@ const SUPABASE_URL = 'https://ztlrayekobgcllnxmqft.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
 
 if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     // Check session on page load
-    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
         if (!session) {
             // Not logged in! Redirect to login page
             window.location.href = 'login.html';
@@ -14,7 +14,7 @@ if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
     });
     
     // Listen for sign-out events (Optional future feature)
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') {
             window.location.href = 'login.html';
         }
@@ -35,7 +35,7 @@ const SECURE_PIN = "SB1234";
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await supabaseClient.auth.signOut();
+                await window.supabaseClient.auth.signOut();
                 sessionStorage.removeItem('dashboard_unlocked');
                 window.location.href = 'login.html';
             });

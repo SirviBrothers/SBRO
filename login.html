@@ -379,11 +379,11 @@
     
     // Only initialize if keys are present to prevent crashes
     if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         document.getElementById('google-signin-btn').addEventListener('click', async (e) => {
             e.preventDefault();
-            const { data, error } = await supabaseClient.auth.signInWithOAuth({
+            const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: window.location.href.replace('login.html', 'index.html')
@@ -395,7 +395,7 @@
         });
         
         // If already logged in, redirect to dashboard automatically
-        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+        window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 window.location.href = 'index.html';
             }
