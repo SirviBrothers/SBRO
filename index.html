@@ -30,14 +30,14 @@
             
             <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 25px;" id="pin-inputs">
                 <!-- 2 Alphabets -->
-                <input type="text" class="pin-box" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px; text-transform: uppercase;">
-                <input type="text" class="pin-box" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px; text-transform: uppercase; margin-right: 10px;">
+                <input type="text" class="pin-box" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px; text-transform: uppercase;">
+                <input type="text" class="pin-box" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px; text-transform: uppercase; margin-right: 10px;">
                 
                 <!-- 4 Numbers -->
-                <input type="text" class="pin-box num" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
-                <input type="text" class="pin-box num" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
-                <input type="text" class="pin-box num" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
-                <input type="text" class="pin-box num" maxlength="1" style="width: 45px; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
+                <input type="text" class="pin-box num" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
+                <input type="text" class="pin-box num" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
+                <input type="text" class="pin-box num" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
+                <input type="text" class="pin-box num" maxlength="1" style="width: 60px; height: 65px; padding: 0; box-sizing: border-box; text-align: center; font-size: 2rem; font-weight: 700; border: 2px solid #D1D5DB; border-radius: 8px;">
             </div>
             
             <div id="pin-error" style="color: #DC2626; font-size: 0.9rem; font-weight: 600; margin-bottom: 15px; min-height: 20px;"></div>
@@ -93,7 +93,7 @@
         <main class="main-content">
             
             <div class="topbar-passbook" style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-color); background: var(--surface-color); display: flex; align-items: center;">
-                <button id="sidebar-toggle-btn" class="btn btn-icon" style="background: transparent; color: var(--text-main); font-size: 1.5rem; border: none; cursor: pointer; padding: 0.5rem; border-radius: var(--radius-md); margin-right: 1rem;">
+                <button id="sidebar-toggle-btn" class="btn btn-icon" style="background: transparent; color: var(--text-main); font-size: 2rem; border: none; cursor: pointer; padding: 0.5rem; border-radius: var(--radius-md); margin-right: 1rem;">
                     <i class="ph ph-list"></i>
                 </button>
                 <div id="mantra-container" style="font-style: italic; color: var(--primary-color); font-weight: 500; font-size: 1.1rem; flex: 1;">
@@ -103,7 +103,7 @@
                 <div id="mantra-container" style="font-style: italic; color: #B45309; font-weight: 700; font-size: 1.3rem; flex: 1; text-align: center;">
                     || ॐ श्री गणेशाय नमः ||
                 </div>
-                <a href="login.html" class="btn btn-secondary" style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.5rem 1rem; color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-weight: 500; transition: all 0.2s;">
+                <a href="#" id="supabase-logout-btn" class="btn btn-secondary" style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.5rem 1rem; color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-weight: 500; transition: all 0.2s;">
                     <i class="ph ph-sign-out"></i> Logout
                 </a>
             </div>

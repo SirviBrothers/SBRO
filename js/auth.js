@@ -28,6 +28,20 @@ if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
 // For now, we use a hardcoded secure PIN as requested: 2 Alphabets, 4 Numbers
 const SECURE_PIN = "SB1234"; 
 
+
+    // Logout Logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const logoutBtn = document.getElementById('supabase-logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await supabaseClient.auth.signOut();
+                sessionStorage.removeItem('dashboard_unlocked');
+                window.location.href = 'login.html';
+            });
+        }
+    });
+
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- Phase 4: 6-Digit Access Code Logic ---
