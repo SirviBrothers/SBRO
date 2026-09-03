@@ -25,6 +25,64 @@ function getHsnForCategory(category) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // === ONE-TIME CLOUD MIGRATION LOGIC ===
+    const migrateBtn = document.getElementById('migrate-btn');
+    if (migrateBtn) {
+        migrateBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if(!confirm("Are you sure you want to upload all your old offline data to the cloud? This will overwrite the cloud database.")) return;
+            
+            migrateBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Uploading...';
+            migrateBtn.style.pointerEvents = 'none';
+
+            try {
+                const oldInv = JSON.parse(localStorage.getItem('sb_inventory_v2') || '[]');
+                if (oldInv.length > 0) {
+                    for (const item of oldInv) {
+                        await StorageManager.saveInventoryItem({
+                            category: item.category, brand: item.brand, variant: item.variant,
+                            quantity: item.quantity, unit: item.unit || 'pcs', price: item.price || 0, minStock: item.minStock || 0
+                        });
+                    }
+                }
+                
+                const oldSales = JSON.parse(localStorage.getItem('sb_sales_history') || '[]');
+                if (oldSales.length > 0) {
+                    for (const sale of oldSales) {
+                        await StorageManager.saveSale({
+                            invoiceNo: sale.invoiceNo, date: sale.date, buyerName: sale.buyerName,
+                            mobile: sale.mobile, address: sale.address, gstn: sale.gstn,
+                            subtotal: sale.subtotal, discount: sale.discount, grandTotal: sale.grandTotal,
+                            receivedAmt: sale.receivedAmt, balance: sale.dueAmount || sale.balance || 0,
+                            paymentMode: sale.paymentMethod, remarks: sale.remarks,
+                            items: sale.items
+                        });
+                    }
+                }
+                
+                const oldParties = JSON.parse(localStorage.getItem('sb_parties') || '[]');
+                if (oldParties.length > 0) {
+                    for (const party of oldParties) {
+                        await StorageManager.saveParty(party);
+                    }
+                }
+                
+                alert("SUCCESS! All your offline data is now secure in the cloud. You will never lose it again.");
+                migrateBtn.style.display = 'none'; // hide it after success
+                
+                // Refresh dashboard
+                document.querySelector('.nav-item[data-target="home-tab"]').click();
+            } catch(err) {
+                console.error(err);
+                alert("Error during migration: " + err.message);
+                migrateBtn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i> Try Again';
+                migrateBtn.style.pointerEvents = 'auto';
+            }
+        });
+    }
+    // ======================================
+
     // Initialize Inventory on first load if empty
     let inventory = await StorageManager.getInventory();
     
