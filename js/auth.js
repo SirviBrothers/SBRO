@@ -2,7 +2,7 @@
 const SUPABASE_URL = 'https://ztlrayekobgcllnxmqft.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
 
-if (SUPABASE_URL !== 'https://ztlrayekobgcllnxmqft.supabase.co') {
+if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     // Check session on page load
