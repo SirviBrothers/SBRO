@@ -537,14 +537,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     mobile,
     gstn,
     address,
-    subtotal: total,
-    discount: 0,
-    grandTotal: total,
-    receivedAmt: paidAmount,
-    balance: dueAmount,
-    paymentMode: dueAmount > 0 ? 'Credit' : 'Cash/Online',
-    remarks: '',
-    items
+    paymentMethod: dueAmount > 0 ? 'Credit' : 'Cash/Online',
+    paidAmount,
+    dueAmount,
+    items,
+    total
 };
 
 // Save Data

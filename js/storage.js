@@ -171,13 +171,13 @@ class StorageManager {
                 mobile: saleData.mobile,
                 address: saleData.address,
                 gstn: saleData.gstn,
-                subtotal: saleData.subtotal,
-                discount: saleData.discount,
-                grand_total: saleData.grandTotal,
-                received_amt: saleData.receivedAmt,
-                balance: saleData.balance,
-                payment_mode: saleData.paymentMode,
-                remarks: saleData.remarks
+                subtotal: saleData.subtotal || saleData.total,
+                discount: saleData.discount || 0,
+                grand_total: saleData.grandTotal || saleData.total,
+                received_amt: saleData.receivedAmt || saleData.paidAmount,
+                balance: saleData.balance || saleData.dueAmount,
+                payment_mode: saleData.paymentMode || saleData.paymentMethod,
+                remarks: saleData.remarks || ''
             }).eq('id', saleId);
             
             // Delete old items and insert new ones
@@ -190,13 +190,13 @@ class StorageManager {
                 mobile: saleData.mobile,
                 address: saleData.address,
                 gstn: saleData.gstn,
-                subtotal: saleData.subtotal,
-                discount: saleData.discount,
-                grand_total: saleData.grandTotal,
-                received_amt: saleData.receivedAmt,
-                balance: saleData.balance,
-                payment_mode: saleData.paymentMode,
-                remarks: saleData.remarks
+                subtotal: saleData.subtotal || saleData.total,
+                discount: saleData.discount || 0,
+                grand_total: saleData.grandTotal || saleData.total,
+                received_amt: saleData.receivedAmt || saleData.paidAmount,
+                balance: saleData.balance || saleData.dueAmount,
+                payment_mode: saleData.paymentMode || saleData.paymentMethod,
+                remarks: saleData.remarks || ''
             }]).select();
             
             if (error) {
@@ -214,9 +214,9 @@ class StorageManager {
                 brand: item.brand,
                 variant: item.variant,
                 quantity: item.qty,
-                unit: item.unit,
+                unit: item.unit || 'pcs',
                 price: item.price,
-                total: item.total
+                total: item.total || item.amount
             }));
             await this.client.from('sale_items').insert(itemsToInsert);
         }
