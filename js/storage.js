@@ -144,6 +144,7 @@ class StorageManager {
             grandTotal: s.grand_total,
             total: s.grand_total,
             receivedAmt: s.received_amt,
+            paidAmount: s.received_amt,
             dueAmount: s.balance,
             balance: s.balance,
             paymentMethod: s.payment_mode,
