@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.share-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const invoiceNo = e.currentTarget.dataset.id;
                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
@@ -708,7 +708,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.download-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const invoiceNo = e.currentTarget.dataset.id;
                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.wa-share-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const invoiceNo = e.currentTarget.dataset.id;
                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     let itemsText = sale.items.map((i, idx) => `${idx + 1}. ${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.amount.toFixed(2)}`).join('\n');
@@ -763,7 +763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.edit-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const invoiceNo = e.currentTarget.dataset.id;
                 loadBillIntoForm(invoiceNo);
             });
         });
@@ -845,7 +845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.mark-paid-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = parseInt(e.target.dataset.id);
+                const id = e.target.dataset.id;
                 document.getElementById('payment-modal-title').textContent = 'Mark as Fully Paid';
                 document.getElementById('payment-credit-id').value = id;
                 document.getElementById('payment-type').value = 'full';
@@ -857,7 +857,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.part-pay-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = parseInt(e.target.dataset.id);
+                const id = e.target.dataset.id;
                 document.getElementById('payment-modal-title').textContent = 'Record Part Payment';
                 document.getElementById('payment-credit-id').value = id;
                 document.getElementById('payment-type').value = 'part';
@@ -870,7 +870,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.edit-date-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = parseInt(e.currentTarget.dataset.id);
+                const id = e.currentTarget.dataset.id;
                 const credit = (await StorageManager.getCredits()).find(c => c.id === id);
                 if (credit) {
                     document.getElementById('edit-date-credit-id').value = id;
@@ -882,7 +882,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.view-history-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = parseInt(e.currentTarget.dataset.id);
+                const id = e.currentTarget.dataset.id;
                 renderPaymentHistory(id);
                 document.getElementById('payment-history-modal').style.display = 'flex';
             });
@@ -1339,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Add event listeners for editing stock cells
         document.querySelectorAll('.stock-cell').forEach(cell => {
             cell.addEventListener('click', async (e) => {
-                const id = parseInt(e.currentTarget.dataset.id);
+                const id = e.currentTarget.dataset.id;
                 const item = (await StorageManager.getInventory()).find(i => i.id === id);
                 if (item) {
                     document.getElementById('modal-title').textContent = 'Edit Inventory Item';
@@ -1469,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         document.querySelectorAll('.edit-party-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = parseInt(e.currentTarget.dataset.id);
+                const id = e.currentTarget.dataset.id;
                 const party = (await StorageManager.getParties()).find(p => p.id === id);
                 if (party) {
                     document.getElementById('party-modal-title').textContent = 'Edit Customer';
