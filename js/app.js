@@ -544,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Share Bill Button
     const shareBtn = document.getElementById('share-bill-btn');
-    shareBtn.addEventListener('click', async () => {
+    if (shareBtn) shareBtn.addEventListener('click', async () => {
         const billData = processBillData();
         if (billData) {
             shareBtn.disabled = true;
