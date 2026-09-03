@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (cat && brand) {
                 const variants = inventory.filter(i => i.category === cat && i.brand === brand);
                 variants.forEach(v => {
-                    varSelect.innerHTML += `<option value="${v.variant}">${v.variant} (Stock: ${v.stock})</option>`;
+                    varSelect.innerHTML += `<option value="${v.variant}">${v.variant} (Stock: ${v.quantity})</option>`;
                 });
             }
         });
