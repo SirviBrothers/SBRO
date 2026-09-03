@@ -1,0 +1,101 @@
+1214:     async function renderInventoryTable() {
+1215:         let inventory = await StorageManager.getInventory();
+1216:         
+1217:         if (currentInventoryFilter !== 'all') {
+1218:             inventory = inventory.filter(item => {
+1219:                 if (currentInventoryFilter === '0') return item.stock === 0;
+1220:                 if (currentInventoryFilter === '1-3') return item.stock >= 1 && item.stock <= 3;
+1221:                 if (currentInventoryFilter === '4-10') return item.stock >= 4 && item.stock <= 10;
+1222:                 if (currentInventoryFilter === '11-30') return item.stock >= 11 && item.stock <= 30;
+1223:                 if (currentInventoryFilter === '31-50') return item.stock >= 31 && item.stock <= 50;
+1224:                 if (currentInventoryFilter === '51-100') return item.stock >= 51 && item.stock <= 100;
+1225:                 return true;
+1226:             });
+1227:         }
+1228: 
+1229:         const container = document.getElementById('inventory-container');
+1230:         container.innerHTML = '';
+1231: 
+1232:         // Group by Category -> Brand -> Variant = Item
+1233:         const grouped = {};
+1234:         inventory.forEach(item => {
+1235:             if (!grouped[item.category]) grouped[item.category] = { brands: new Set(), variants: new Set(), items: {} };
+1236:             grouped[item.category].brands.add(item.brand);
+1237:             grouped[item.category].variants.add(item.variant);
+1238:             
+1239:             if (!grouped[item.category].items[item.brand]) {
+1240:                 grouped[item.category].items[item.brand] = {};
+1241:             }
+1242:             grouped[item.category].items[item.brand][item.variant] = item;
+1243:         });
+1244: 
+1245:         for (const cat in grouped) {
+1246:             const brands = Array.from(grouped[cat].brands);
+1247:             const variants = Array.from(grouped[cat].variants);
+1248: 
+1249:             const catSection = document.createElement('div');
+1250:             catSection.style.marginBottom = '3rem';
+1251:             
+1252:             const catTitle = document.createElement('h4');
+1253:             catTitle.textContent = cat;
+1254:             catTitle.style.fontSize = '1.3rem';
+1255:             catTitle.style.color = 'var(--primary-color)';
+1256:             catTitle.style.marginBottom = '1rem';
+1257:             catTitle.style.borderBottom = '2px solid var(--border-color)';
+1258:             catTitle.style.paddingBottom = '0.5rem';
+1259:             catSection.appendChild(catTitle);
+1260: 
+1261:             const tableWrap = document.createElement('div');
+1262:             tableWrap.className = 'table-responsive';
+1263: 
+1264:             const table = document.createElement('table');
+1265:             table.className = 'data-table';
+1266:             table.style.width = '100%';
+1267:             table.style.borderCollapse = 'collapse';
+1268: 
+1269:             // Header Row (Variants)
+1270:             const thead = document.createElement('thead');
+1271:             const trHead = document.createElement('tr');
+1272:             const thEmpty = document.createElement('th');
+1273:             thEmpty.textContent = 'Brand / Variant';
+1274:             thEmpty.style.backgroundColor = '#F3F4F6';
+1275:             trHead.appendChild(thEmpty);
+1276: 
+1277:             variants.forEach(variant => {
+1278:                 const th = document.createElement('th');
+1279:                 
+1280:                 // Extract HSN for this variant
+1281:                 let hsn = '';
+1282:                 for (const b of brands) {
+1283:                     if (grouped[cat].items[b] && grouped[cat].items[b][variant]) {
+1284:                         hsn = grouped[cat].items[b][variant].hsn || getHsnForCategory(cat);
+1285:                         break;
+1286:                     }
+1287:                 }
+1288: 
+1289:                 th.innerHTML = `${variant}<br><span style="font-size: 0.85em; color: #888; font-weight: normal;">HSN: ${hsn}</span>`;
+1290:                 th.style.textAlign = 'center';
+1291:                 th.style.backgroundColor = '#F9FAFB';
+1292:                 trHead.appendChild(th);
+1293:             });
+1294:             thead.appendChild(trHead);
+1295:             table.appendChild(thead);
+1296: 
+1297:             // Body Rows (Brands)
+1298:             const tbody = document.createElement('tbody');
+1299:             brands.forEach(brand => {
+1300:                 const tr = document.createElement('tr');
+1301:                 const tdBrand = document.createElement('td');
+1302:                 tdBrand.textContent = brand;
+1303:                 tdBrand.style.fontWeight = '600';
+1304:                 tdBrand.style.backgroundColor = '#F9FAFB';
+1305:                 tr.appendChild(tdBrand);
+1306: 
+1307:                 variants.forEach(variant => {
+1308:                     const td = document.createElement('td');
+1309:                     td.style.textAlign = 'center';
+1310:                     const item = grouped[cat].items[brand]?.[variant];
+1311:                     
+1312:                     if (item) {
+1313:                         let stockColor = '#10B981'; // Green
+1314:                         if (item.stock < 10) stockColor = '#EF4444'; // Red

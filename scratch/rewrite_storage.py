@@ -1,4 +1,8 @@
-// Supabase Cloud Storage Manager
+import os
+
+storage_path = r'c:\Users\ompra\Desktop\Sirvi Brothers\js\storage.js'
+
+new_storage = """// Supabase Cloud Storage Manager
 // Completely replaces localStorage with Supabase async calls
 
 class StorageManager {
@@ -64,15 +68,6 @@ class StorageManager {
     // ==========================================
     // INVENTORY
     // ==========================================
-    
-    static async checkStock(category, brand, variant, qty) {
-        const inventory = await this.getInventory();
-        const items = inventory.filter(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (items.length === 0) return false;
-        const totalQty = items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0);
-        return totalQty >= qty;
-    }
-    
     static async getInventory() {
         const { data, error } = await this.client.from('inventory').select('*').order('category', { ascending: true });
         if (error) console.error("Error fetching inventory:", error);
@@ -113,83 +108,14 @@ class StorageManager {
     // ==========================================
     // SALES / BILLS
     // ==========================================
-    
-    static async getCredits() {
-        const sales = await this.getSales();
-        const salesCredits = sales.filter(s => s.balance > 0).map(s => ({...s, type: 'Sale'}));
-        
-        const purchases = await this.getPurchases();
-        const purchaseCredits = purchases.filter(p => p.balance > 0).map(p => ({
-            ...p, 
-            buyerName: p.vendorName, // map for uniform rendering
-            type: 'Purchase'
-        }));
-        
-        return [...salesCredits, ...purchaseCredits].sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
-
-    static async updateCreditDueDate(id, newDate, type = 'Sale') {
-        const table = type === 'Sale' ? 'sales' : 'purchases';
-        const { data, error } = await this.client.from(table).select('remarks').eq('id', id).single();
-        if (data) {
-            let remarks = data.remarks || '';
-            remarks = remarks.replace(/DueDate:[\d-]+/, '');
-            remarks += ` DueDate:${newDate}`;
-            await this.client.from(table).update({ remarks: remarks.trim() }).eq('id', id);
-        }
-    }
-    
-    static async markCreditAsPaid(id, date, type = 'Sale') {
-        const table = type === 'Sale' ? 'sales' : 'purchases';
-        const { data } = await this.client.from(table).select('grand_total, total_amount').eq('id', id).single();
-        if (data) {
-            const total = data.grand_total || data.total_amount;
-            await this.client.from(table).update({ balance: 0, received_amt: total, paid_amount: total }).eq('id', id);
-        }
-    }
-
-    
     static async getSales() {
         // Fetch sales with their nested items
         const { data, error } = await this.client.from('sales').select(`
             *,
             sale_items (*)
         `).order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error("Error fetching sales:", error);
-            return [];
-        }
-        
-        return (data || []).map(s => ({
-            id: s.id,
-            invoiceNo: s.invoice_no,
-            date: s.date,
-            buyerName: s.buyer_name,
-            mobile: s.mobile,
-            address: s.address,
-            gstn: s.gstn,
-            subtotal: s.subtotal,
-            discount: s.discount,
-            grandTotal: s.grand_total,
-            total: s.grand_total,
-            receivedAmt: s.received_amt,
-            paidAmount: s.received_amt,
-            dueAmount: s.balance,
-            balance: s.balance,
-            paymentMethod: s.payment_mode,
-            remarks: s.remarks,
-            items: (s.sale_items || []).map(i => ({
-                id: i.id,
-                category: i.category,
-                brand: i.brand,
-                variant: i.variant,
-                qty: i.quantity,
-                unit: i.unit,
-                price: i.price,
-                total: i.total
-            }))
-        }));
+        if (error) console.error("Error fetching sales:", error);
+        return data || [];
     }
 
     static async saveSale(saleData, isEdit = false) {
@@ -202,13 +128,13 @@ class StorageManager {
                 mobile: saleData.mobile,
                 address: saleData.address,
                 gstn: saleData.gstn,
-                subtotal: saleData.subtotal || saleData.total,
-                discount: saleData.discount || 0,
-                grand_total: saleData.grandTotal || saleData.total,
-                received_amt: saleData.receivedAmt || saleData.paidAmount,
-                balance: saleData.balance || saleData.dueAmount,
-                payment_mode: saleData.paymentMode || saleData.paymentMethod,
-                remarks: saleData.remarks || ''
+                subtotal: saleData.subtotal,
+                discount: saleData.discount,
+                grand_total: saleData.grandTotal,
+                received_amt: saleData.receivedAmt,
+                balance: saleData.balance,
+                payment_mode: saleData.paymentMode,
+                remarks: saleData.remarks
             }).eq('id', saleId);
             
             // Delete old items and insert new ones
@@ -221,13 +147,13 @@ class StorageManager {
                 mobile: saleData.mobile,
                 address: saleData.address,
                 gstn: saleData.gstn,
-                subtotal: saleData.subtotal || saleData.total,
-                discount: saleData.discount || 0,
-                grand_total: saleData.grandTotal || saleData.total,
-                received_amt: saleData.receivedAmt || saleData.paidAmount,
-                balance: saleData.balance || saleData.dueAmount,
-                payment_mode: saleData.paymentMode || saleData.paymentMethod,
-                remarks: saleData.remarks || ''
+                subtotal: saleData.subtotal,
+                discount: saleData.discount,
+                grand_total: saleData.grandTotal,
+                received_amt: saleData.receivedAmt,
+                balance: saleData.balance,
+                payment_mode: saleData.paymentMode,
+                remarks: saleData.remarks
             }]).select();
             
             if (error) {
@@ -245,9 +171,9 @@ class StorageManager {
                 brand: item.brand,
                 variant: item.variant,
                 quantity: item.qty,
-                unit: item.unit || 'pcs',
+                unit: item.unit,
                 price: item.price,
-                total: item.total || item.amount
+                total: item.total
             }));
             await this.client.from('sale_items').insert(itemsToInsert);
         }
@@ -255,57 +181,6 @@ class StorageManager {
         await this.autoRegisterParty(saleData.buyerName, saleData.mobile, saleData.address, saleData.gstn);
     }
 
-    
-    static async deductStock(category, brand, variant, qty) {
-        const inventory = await this.getInventory();
-        const items = inventory.filter(i => i.category === category && i.brand === brand && i.variant === variant);
-        let remainingToDeduct = parseFloat(qty) || 0;
-        
-        for (const item of items) {
-            if (remainingToDeduct <= 0) break;
-            const itemQty = parseFloat(item.quantity) || 0;
-            const deductFromThis = Math.min(itemQty, remainingToDeduct);
-            
-            if (deductFromThis > 0) {
-                await this.client.from('inventory').update({
-                    quantity: itemQty - deductFromThis
-                }).eq('id', item.id);
-                remainingToDeduct -= deductFromThis;
-            }
-        }
-        
-        // If there's still remainder (meaning they forced deduction below 0), subtract from the first item
-        if (remainingToDeduct > 0 && items.length > 0) {
-            const firstItem = items[0];
-            const itemQty = parseFloat(firstItem.quantity) || 0;
-            await this.client.from('inventory').update({
-                quantity: itemQty - remainingToDeduct
-            }).eq('id', firstItem.id);
-        }
-    }
-
-    static async revertSaleStock(invoiceNo) {
-        const sales = await this.getSales();
-        const sale = sales.find(s => s.invoice_no === invoiceNo || s.invoiceNo === invoiceNo);
-        if (sale && sale.sale_items) {
-            for (const item of sale.sale_items) {
-                const inventory = await this.getInventory();
-                const invItem = inventory.find(i => i.category === item.category && i.brand === item.brand && i.variant === item.variant);
-                if (invItem) {
-                    await this.client.from('inventory').update({
-                        quantity: invItem.quantity + parseFloat(item.quantity)
-                    }).eq('id', invItem.id);
-                }
-            }
-        }
-    }
-    
-    
-    static async updateCreditStatus(creditId, status) {
-        // Mock for now until full credit module is built
-        console.log('Update credit status:', creditId, status);
-    }
-    
     static async getNextInvoiceNo() {
         const { data, error } = await this.client.from('sales')
             .select('invoice_no')
@@ -331,33 +206,8 @@ class StorageManager {
             *,
             purchase_items (*)
         `).order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error("Error fetching purchases:", error);
-            return [];
-        }
-        
-        return (data || []).map(p => ({
-            id: p.id,
-            billNo: p.bill_no,
-            date: p.date,
-            vendorName: p.vendor_name,
-            mobile: p.mobile,
-            totalAmount: p.total_amount,
-            total: p.total_amount,
-            paidAmount: p.paid_amount,
-            balance: p.balance,
-            items: (p.purchase_items || []).map(i => ({
-                id: i.id,
-                category: i.category,
-                brand: i.brand,
-                variant: i.variant,
-                qty: i.quantity,
-                unit: i.unit,
-                price: i.price,
-                total: i.total
-            }))
-        }));
+        if (error) console.error("Error fetching purchases:", error);
+        return data || [];
     }
 
     static async savePurchase(purchaseData) {
@@ -416,6 +266,12 @@ class StorageManager {
             }
         }
 
-        await this.autoRegisterParty(purchaseData.vendorName, purchaseData.mobile, '', purchaseData.gstn);
+        await this.autoRegisterParty(purchaseData.vendorName, purchaseData.mobile, '', '');
     }
 }
+"""
+
+with open(storage_path, 'w', encoding='utf-8') as f:
+    f.write(new_storage)
+
+print("SUCCESS: Completely rewrote storage.js with async Supabase logic.")

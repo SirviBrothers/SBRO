@@ -1,0 +1,45 @@
+140:             <section id="home-tab" class="tab-pane active">
+141:                 <div class="page-header">
+142:                     <h1>Business Overview</h1>
+143:                 </div>
+144:                 <div class="dashboard-grid">
+145:                     <div class="stat-card">
+146:                         <div class="stat-icon"><i class="ph ph-currency-inr"></i></div>
+147:                         <div class="stat-details">
+148:                             <h3>Daily Sales</h3>
+149:                             <p id="dash-daily-sales">₹ 0.00</p>
+150:                         </div>
+151:                     </div>
+152:                     <div class="stat-card">
+153:                         <div class="stat-icon"><i class="ph ph-chart-line-up"></i></div>
+154:                         <div class="stat-details">
+155:                             <h3>Weekly Sales</h3>
+156:                             <p id="dash-weekly-sales">₹ 0.00</p>
+157:                         </div>
+158:                     </div>
+159:                     <div class="stat-card">
+160:                         <div class="stat-icon"><i class="ph ph-calendar-check"></i></div>
+161:                         <div class="stat-details">
+162:                             <h3>Monthly Sales</h3>
+163:                             <p id="dash-monthly-sales">₹ 0.00</p>
+164:                         </div>
+165:                     </div>
+166:                     <div class="stat-card">
+167:                         <div class="stat-icon"><i class="ph ph-receipt"></i></div>
+168:                         <div class="stat-details">
+169:                             <h3>Avg Order Value</h3>
+170:                             <p id="dash-avg-order">₹ 0.00</p>
+171:                         </div>
+172:                     </div>
+173:                     <div class="stat-card stat-card-danger">
+174:                         <div class="stat-icon"><i class="ph ph-warning-circle"></i></div>
+175:                         <div class="stat-details">
+176:                             <h3>Total Due Amount</h3>
+177:                             <p id="dash-total-due">₹ 0.00</p>
+178:                         </div>
+179:                     </div>
+180:                 </div>
+181:             </section>
+182: 
+183:             <!-- Tab: Billing -->
+184:             <section id="billing-tab" class="tab-pane">

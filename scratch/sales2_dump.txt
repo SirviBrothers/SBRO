@@ -1,0 +1,81 @@
+643:     async function renderSalesTable() {
+644:         const sales = await StorageManager.getSales();
+645:         const tbody = document.querySelector('#sales-history-table tbody');
+646:         tbody.innerHTML = '';
+647:         
+648:         let todayTotal = 0, weekTotal = 0, monthTotal = 0;
+649:         const now = new Date();
+650: 
+651:         sales.slice().reverse().forEach(sale => {
+652:             const saleDate = new Date(sale.date);
+653:             const diffTime = Math.abs(now - saleDate);
+654:             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+655:             
+656:             if (diffDays <= 1) todayTotal += sale.total;
+657:             if (diffDays <= 7) weekTotal += sale.total;
+658:             if (saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear()) {
+659:                 monthTotal += sale.total;
+660:             }
+661: 
+662:             const tr = document.createElement('tr');
+663:             tr.innerHTML = `
+664:                 <td>${sale.date}</td>
+665:                 <td>#${sale.invoiceNo}</td>
+666:                 <td>${sale.buyerName}</td>
+667:                 <td><span class="badge ${sale.paymentMethod === 'Credit' ? 'warning' : 'success'}">${sale.paymentMethod}</span></td>
+668:                 <td>₹ ${sale.total.toFixed(2)}</td>
+669:                 <td>
+670:                     <div style="display: flex; gap: 0.5rem;">
+671:                         <button class="btn btn-icon edit-sale-btn" data-id="${sale.invoiceNo}" title="Edit"><i class="ph ph-pencil"></i></button>
+672:                         <button class="btn btn-icon download-sale-btn" data-id="${sale.invoiceNo}" title="Download PDF"><i class="ph ph-download-simple"></i></button>
+673:                         <button class="btn btn-icon share-sale-btn" data-id="${sale.invoiceNo}" title="Share PDF"><i class="ph ph-share-network"></i></button>
+674:                         <button class="btn btn-icon wa-share-btn" data-id="${sale.invoiceNo}" title="Share via WhatsApp" style="color: #25D366; border-color: #25D366;"><i class="ph ph-whatsapp-logo"></i></button>
+675:                     </div>
+676:                 </td>
+677:             `;
+678:             tbody.appendChild(tr);
+679:         });
+680: 
+681:         document.querySelectorAll('.share-sale-btn').forEach(btn => {
+682:             btn.addEventListener('click', async (e) => {
+683:                 const invoiceNo = e.currentTarget.dataset.id;
+684:                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
+685:                 if (sale) {
+686:                     const btn = e.currentTarget;
+687:                     const originalHtml = btn.innerHTML;
+688:                     btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+689:                     btn.disabled = true;
+690:                     
+691:                     try {
+692:                         const pdfBlob = await PDFGenerator.generateBlob(sale);
+693:                         const file = new File([pdfBlob], `Invoice_${sale.invoiceNo}.pdf`, { type: 'application/pdf' });
+694:                         if (navigator.canShare && navigator.canShare({ files: [file] })) {
+695:                             await navigator.share({
+696:                                 files: [file],
+697:                                 title: `Invoice #${sale.invoiceNo}`,
+698:                                 text: `Invoice from Sirvi Brothers\nThank you for your business!`
+699:                             });
+700:                         } else {
+701:                             alert('Sharing not supported on this device. Downloading instead...');
+702:                             await PDFGenerator.generate(sale);
+703:                         }
+704:                     } catch (error) {
+705:                         console.error("Share failed", error);
+706:                     } finally {
+707:                         btn.innerHTML = originalHtml;
+708:                         btn.disabled = false;
+709:                     }
+710:                 }
+711:             });
+712:         });
+713: 
+714:         document.querySelectorAll('.download-sale-btn').forEach(btn => {
+715:             btn.addEventListener('click', async (e) => {
+716:                 const invoiceNo = e.currentTarget.dataset.id;
+717:                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
+718:                 if (sale) {
+719:                     const btn = e.currentTarget;
+720:                     const originalHtml = btn.innerHTML;
+721:                     btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+722:                     btn.disabled = true;
+723:                     try {

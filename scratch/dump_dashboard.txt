@@ -1,0 +1,101 @@
+149:     async function renderHomeDashboard() {
+150:         const sales = await StorageManager.getSales();
+151:         const credits = await StorageManager.getCredits();
+152:         
+153:         let todaySales = 0;
+154:         let weeklySales = 0;
+155:         let monthlySales = 0;
+156:         let totalRevenue = 0;
+157:         
+158:         const now = new Date();
+159:         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+160:         const startOfWeek = startOfDay - (now.getDay() * 24 * 60 * 60 * 1000); // Rough start of week
+161:         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+162: 
+163:         sales.forEach(sale => {
+164:             const saleDate = new Date(sale.date).getTime();
+165:             totalRevenue += (sale.total || 0);
+166:             
+167:             if (saleDate >= startOfDay) todaySales += sale.total;
+168:             if (saleDate >= startOfWeek) weeklySales += sale.total;
+169:             if (saleDate >= startOfMonth) monthlySales += sale.total;
+170:         });
+171: 
+172:         const avgOrder = sales.length > 0 ? (totalRevenue / sales.length) : 0;
+173:         
+174:         let totalDue = 0;
+175:         credits.forEach(credit => {
+176:             if (credit.status !== 'Paid') {
+177:                 const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
+178:                 totalDue += ((credit.total || 0) - totalPaid);
+179:             }
+180:         });
+181: 
+182:         const eToday = document.getElementById('dash-daily-sales');
+183:         if(eToday) eToday.textContent = `₹ ${todaySales.toFixed(2)}`;
+184:         
+185:         const eWeek = document.getElementById('dash-weekly-sales');
+186:         if(eWeek) eWeek.textContent = `₹ ${weeklySales.toFixed(2)}`;
+187:         
+188:         const eMonth = document.getElementById('dash-monthly-sales');
+189:         if(eMonth) eMonth.textContent = `₹ ${monthlySales.toFixed(2)}`;
+190:         
+191:         const eAvg = document.getElementById('dash-avg-order');
+192:         if(eAvg) eAvg.textContent = `₹ ${avgOrder.toFixed(2)}`;
+193:         
+194:         const eDue = document.getElementById('dash-total-due');
+195:         if(eDue) eDue.textContent = `₹ ${totalDue.toFixed(2)}`;
+196:     }
+197:     
+198:     renderHomeDashboard();
+199: 
+200:     // Paid Amount and Due Amount Logic
+201:     const paidAmountInput = document.getElementById('paid-amount');
+202:     const dueDateGroup = document.querySelector('.due-date-group');
+203:     const dueAmountContainer = document.getElementById('due-amount-container');
+204:     const dueAmountDisplay = document.getElementById('due-amount');
+205:     
+206:     let isPaidAmountManuallyEdited = false;
+207: 
+208:     paidAmountInput.addEventListener('input', async () => {
+209:         isPaidAmountManuallyEdited = true;
+210:         recalculateDueAmount();
+211:     });
+212: 
+213:     function recalculateDueAmount() {
+214:         const total = parseFloat(document.getElementById('grand-total').dataset.value || 0);
+215:         let paid = parseFloat(paidAmountInput.value);
+216:         if (isNaN(paid)) paid = 0;
+217:         
+218:         const due = total - paid;
+219:         
+220:         if (due > 0) {
+221:             dueAmountContainer.style.display = 'block';
+222:             dueAmountDisplay.textContent = `₹ ${due.toFixed(2)}`;
+223:             dueDateGroup.style.display = 'flex';
+224:             
+225:             // Set default due date to 1 month from now if empty
+226:             if (!document.getElementById('due-date').value) {
+227:                 const nextMonth = new Date();
+228:                 nextMonth.setMonth(nextMonth.getMonth() + 1);
+229:                 document.getElementById('due-date').valueAsDate = nextMonth;
+230:             }
+231:         } else {
+232:             dueAmountContainer.style.display = 'none';
+233:             dueDateGroup.style.display = 'none';
+234:         }
+235:     }
+236: 
+237:     // Billing Form Dynamic Rows
+238:     const addRowBtn = document.getElementById('add-row-btn');
+239:     const itemsTbody = document.querySelector('#items-table tbody');
+240: 
+241:     async function createRow(itemData = null) {
+242:         const inventory = await StorageManager.getInventory();
+243:         const categories = [...new Set(inventory.map(i => i.category))];
+244: 
+245:         const tr = document.createElement('tr');
+246:         
+247:         // Category Select
+248:         const catSelect = document.createElement('select');
+249:         catSelect.innerHTML = `<option value="">Select</option>` + 

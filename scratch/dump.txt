@@ -1,0 +1,101 @@
+456:     async function processBillData() {
+457:         const date = document.getElementById('bill-date').value;
+458:         const buyerName = document.getElementById('buyer-name').value.trim();
+459:         const mobile = document.getElementById('buyer-mobile').value.trim();
+460:         const gstn = document.getElementById('buyer-gstn').value.trim();
+461:         const address = document.getElementById('buyer-address').value.trim();
+462:         
+463:         if (!buyerName) {
+464:             alert('Please enter Buyer Name');
+465:             return null;
+466:         }
+467:         if (!mobile) {
+468:             alert('Please enter Mobile Number');
+469:             return null;
+470:         }
+471: 
+472:         const items = [];
+473:         let totalAmount = 0;
+474:         let valid = true;
+475:         let stockError = '';
+476: 
+477:         const rows = document.querySelectorAll('#items-table tbody tr');
+478:         for(let i=0; i<rows.length; i++) {
+479:             const tr = rows[i];
+480:             const selects = tr.querySelectorAll('select');
+481:             const inputs = tr.querySelectorAll('input');
+482:             const amtDisplay = tr.querySelector('.item-amount-display');
+483:             const hsnInput = tr.querySelector('.b-hsn');
+484:             
+485:             const cat = selects[0].value;
+486:             if (cat) {
+487:                 const brand = selects[1].value;
+488:                 const variant = selects[2].value;
+489:                 const hsn = hsnInput ? hsnInput.value : '';
+490:                 const price = parseFloat(inputs[1].value) || 0;
+491:                 const qty = parseInt(inputs[2].value) || 0;
+492:                 const amount = parseFloat(amtDisplay.dataset.value || 0);
+493: 
+494:                 if (!brand || !variant) valid = false;
+495: 
+496:                 if (!await StorageManager.checkStock(cat, brand, variant, qty)) {
+497:                     stockError += `\n- Not enough stock for ${brand} (${variant}). Requested: ${qty}`;
+498:                 }
+499: 
+500:                 items.push({ category: cat, brand, variant, hsn, price, qty, amount });
+501:                 totalAmount += amount;
+502:             }
+503:         }
+504: 
+505:         if (items.length === 0) {
+506:             alert('Please add at least one valid item');
+507:             return null;
+508:         }
+509:         if (!valid) {
+510:             alert('Please select Brand and Variant for all added items');
+511:             return null;
+512:         }
+513:         if (stockError) {
+514:             alert('Stock Error!' + stockError);
+515:             return null;
+516:         }
+517: 
+518:         // Deduct Stock
+519:         if (editingInvoiceNo !== null) {
+520:             await StorageManager.revertSaleStock(editingInvoiceNo);
+521:         }
+522: 
+523:         for (const item of items) {
+524:             await StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
+525:         }
+526: 
+527:         const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNo();
+528:         const total = totalAmount;
+529:         let paidAmount = parseFloat(paidAmountInput.value);
+530:         if (isNaN(paidAmount)) paidAmount = 0;
+531:         const dueAmount = total - paidAmount;
+532: 
+533:         const billData = {
+534:     invoiceNo,
+535:     date,
+536:     buyerName,
+537:     mobile,
+538:     gstn,
+539:     address,
+540:     paymentMethod: dueAmount > 0 ? 'Credit' : 'Cash/Online',
+541:     paidAmount,
+542:     dueAmount,
+543:     items,
+544:     total
+545: };
+546: 
+547: // Save Data
+548: await StorageManager.saveSale(billData, editingInvoiceNo !== null);
+549: 
+550: editingInvoiceNo = null;
+551:         document.querySelector('#billing-tab .page-header h1').textContent = 'New Bill';
+552:         
+553:         return billData;
+554:     }
+555: 
+556:     function resetForm() {
