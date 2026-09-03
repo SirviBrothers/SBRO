@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         sales.forEach(sale => {
             const saleDate = new Date(sale.date).getTime();
-            totalRevenue += sale.total;
+            totalRevenue += (sale.total || 0);
             
             if (saleDate >= startOfDay) todaySales += sale.total;
             if (saleDate >= startOfWeek) weeklySales += sale.total;
@@ -175,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         credits.forEach(credit => {
             if (credit.status !== 'Paid') {
                 const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
-                totalDue += (credit.total - totalPaid);
+                totalDue += ((credit.total || 0) - totalPaid);
             }
         });
 
@@ -642,10 +642,10 @@ editingInvoiceNo = null;
             const diffTime = Math.abs(now - saleDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             
-            if (diffDays <= 1) todayTotal += sale.total;
-            if (diffDays <= 7) weekTotal += sale.total;
+            if (diffDays <= 1) todayTotal += (sale.total || 0);
+            if (diffDays <= 7) weekTotal += (sale.total || 0);
             if (saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear()) {
-                monthTotal += sale.total;
+                monthTotal += (sale.total || 0);
             }
 
             const tr = document.createElement('tr');
@@ -654,7 +654,7 @@ editingInvoiceNo = null;
                 <td>#${sale.invoiceNo}</td>
                 <td>${sale.buyerName}</td>
                 <td><span class="badge ${sale.paymentMethod === 'Credit' ? 'warning' : 'success'}">${sale.paymentMethod}</span></td>
-                <td>₹ ${sale.total.toFixed(2)}</td>
+                <td>₹ ${(sale.total || 0).toFixed(2)}</td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-icon edit-sale-btn" data-id="${sale.invoiceNo}" title="Edit"><i class="ph ph-pencil"></i></button>
