@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Sirvi Brothers</title>
+<style>
+  :root{
+    --ink-deep: #060b18;
+    --ink-mid: #0d1a30;
+    --ink-teal: #113a3c;
+    --gold: #f4b93f;
+    --gold-soft: #e9c46a;
+    --saffron: #ff8a34;
+    --marigold: #ffb703;
+    --paper: #fdf6e9;
+    --leaf: #4e7a3c;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    min-height:100%;
+    background: #F3F4F6;
+    font-family: 'Segoe UI', 'Noto Sans', system-ui, sans-serif;
+    color: #1F2937;
+    overflow-x:hidden;
+  }
+
+  .stage{
+    position:relative;
+    min-height:100vh;
+    width:100%;
+    background: #F3F4F6;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  /* ---------- starfield ---------- */
+  .stars{
+    display: none;
+  }
+  .star{
+    position:absolute;
+    background:#fff;
+    border-radius:50%;
+    opacity:.75;
+    animation: twinkle 4s ease-in-out infinite;
+  }
+  @keyframes twinkle{
+    0%,100%{ opacity:.25; }
+    50%{ opacity:.9; }
+  }
+
+  /* ---------- header row ---------- */
+  .header-row{
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding: 20px 40px;
+    position:relative;
+    z-index:4;
+  }
+
+  .goddess-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .goddess-frame{
+    width:156px;
+    height:156px;
+    border-radius:50%;
+    padding:3px;
+    background: conic-gradient(from 0deg, var(--gold), var(--saffron), var(--gold-soft), var(--gold));
+    box-shadow: 0 0 22px rgba(244,185,63,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .goddess-frame img{
+    width:100%;
+    height:100%;
+    border-radius:50%;
+    object-fit:cover;
+    background:#fff;
+  }
+
+  .new-moments{
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--gold-soft);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- center content ---------- */
+  .center-content{
+    flex:1;
+    width:100%;
+    max-width:1180px;
+    padding: 30px 26px 40px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content: center;
+    text-align:center;
+    position:relative;
+    z-index:3;
+  }
+
+  h1.headline{
+    font-size: clamp(2.6rem, 11vw, 3.6rem);
+    line-height: 1.02;
+    margin: 0 0 22px;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    color: #1F2937;
+  }
+
+  .subline{
+    font-size:16px;
+    line-height:1.55;
+    color:#6B7280;
+    text-align:center;
+    margin: 0 0 40px;
+  }
+  .subline b{ color: #B45309; font-weight:700; font-size: 1.2rem; letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .signin-btn{
+    appearance:none;
+    border:none;
+    cursor:pointer;
+    background: linear-gradient(135deg, var(--gold-soft), var(--saffron));
+    color:#241300;
+    font-size:16px;
+    font-weight:800;
+    letter-spacing:.03em;
+    padding: 16px 60px;
+    border-radius: 999px;
+    box-shadow: 0 10px 26px rgba(255,138,52,0.35);
+    transition: transform .15s ease, box-shadow .15s ease;
+    text-decoration: none;
+  }
+  .signin-btn:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(255,138,52,0.45);
+  }
+  .signin-btn:active{ transform: translateY(0); }
+
+  /* ---------- side logos ---------- */
+  .side-logos {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      z-index: 10;
+  }
+  .left-logos { left: 36px; }
+  .right-logos { right: 36px; }
+
+  .logo-box {
+      width: 76px;
+      height: 76px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 6px;
+      cursor: pointer;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  }
+  .logo-box.dark-box {
+      background: #050811;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(244, 185, 63, 0.3);
+  }
+  .logo-box:hover {
+      transform: scale(1.1);
+      box-shadow: 0 14px 30px rgba(244, 185, 63, 0.35);
+  }
+  .logo-box.dark-box:hover {
+      box-shadow: 0 14px 30px rgba(255, 138, 52, 0.45), inset 0 0 0 1px rgba(244, 185, 63, 0.6);
+  }
+  .logo-box img {
+      width: 86%;
+      height: 86%;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+  }
+  
+  @keyframes swing {
+      0%, 100% { transform: rotate(12deg); }
+      50% { transform: rotate(-12deg); }
+  }
+  .nimbu-totem {
+      height: 140px;
+      width: auto;
+      object-fit: contain;
+      transform-origin: top center;
+      animation: swing 3.5s ease-in-out infinite;
+      filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.4));
+  }
+  @media (max-width: 900px) {
+      .side-logos { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <div class="stars" id="stars"></div>
+
+  <div class="header-row">
+    <div class="goddess-wrap">
+      <div class="goddess-frame" title="Shree Aai Mataji">
+        <img src="assets/mataji.jpg" alt="Shree Aai Mataji">
+      </div>
+      <div style="color: #B45309; font-weight: 800; font-size: 1.2rem; margin-top: 8px;">Jai Mata Di</div>
+    </div>
+    
+    <div class="new-moments" style="display: flex; justify-content: center; align-items: flex-start;">
+        <img src="assets/nimbu.png" alt="Nimbu Mirchi" class="nimbu-totem">
+    </div>
+  </div>
+
+  <!-- Left Logos -->
+  <div class="side-logos left-logos" aria-label="Brand Partners Left">
+      <div style="text-align: center; color: #6B7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: -10px;">Our Brands</div>
+      <div class="logo-box" title="GM Modular"><img src="assets/brands/gm.png" alt="GM Modular"></div>
+      <div class="logo-box" title="Crompton"><img src="assets/brands/crompton.png" alt="Crompton"></div>
+      <div class="logo-box" title="Indo"><img src="assets/brands/indo.png" alt="Indo"></div>
+      <div class="logo-box dark-box" title="V-Guard"><img src="assets/brands/vguard.png" alt="V-Guard"></div>
+  </div>
+
+  <!-- Right Logos -->
+  <div class="side-logos right-logos" aria-label="Brand Partners Right">
+      <div style="text-align: center; color: #6B7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: -10px;">Trusted Brands</div>
+      <div class="logo-box" title="Bajaj"><img src="assets/brands/bajaj.png" alt="Bajaj"></div>
+      <div class="logo-box" title="Usha"><img src="assets/brands/usha.png" alt="Usha"></div>
+      <div class="logo-box" title="RR Kabel"><img src="assets/brands/rr.png" alt="RR Kabel"></div>
+      <div class="logo-box" title="Havells"><img src="assets/brands/havells.png" alt="Havells"></div>
+  </div>
+
+  <div class="center-content">
+    <img src="assets/sb_logo.png" alt="Sirvi Brothers Logo" style="width: 220px; height: auto; margin-bottom: 40px; filter: drop-shadow(0px 10px 20px rgba(0,0,0,0.2));">
+    <!-- Links directly to the dashboard -->
+    <a href="index.html" class="signin-btn">Sign In</a>
+  </div>
+
+</div>
+
+<script>
+    // Starfield generation
+    const starsContainer = document.getElementById('stars');
+    for(let i=0; i<100; i++) {
+        let star = document.createElement('div');
+        star.className = 'star';
+        let size = Math.random() * 3;
+        star.style.width = size + 'px';
+        star.style.height = size + 'px';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        star.style.animationDelay = (Math.random() * 4) + 's';
+        starsContainer.appendChild(star);
+    }
+</script>
+
+</body>
+</html>

@@ -1,3 +1,4 @@
+let currentInventoryFilter = 'all';
 // Core UI Logic and State Management
 
 const HSN_MAP = {
@@ -605,7 +606,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-icon edit-sale-btn" data-id="${sale.invoiceNo}" title="Edit"><i class="ph ph-pencil"></i></button>
-                        <button class="btn btn-icon share-sale-btn" data-id="${sale.invoiceNo}" title="Share"><i class="ph ph-share-network"></i></button>
+                        <button class="btn btn-icon download-sale-btn" data-id="${sale.invoiceNo}" title="Download PDF"><i class="ph ph-download-simple"></i></button>
+                        <button class="btn btn-icon share-sale-btn" data-id="${sale.invoiceNo}" title="Share PDF"><i class="ph ph-share-network"></i></button>
+                        <button class="btn btn-icon wa-share-btn" data-id="${sale.invoiceNo}" title="Share via WhatsApp" style="color: #25D366; border-color: #25D366;"><i class="ph ph-whatsapp-logo"></i></button>
                     </div>
                 </td>
             `;
@@ -629,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await navigator.share({
                                 files: [file],
                                 title: `Invoice #${sale.invoiceNo}`,
-                                text: `Please find attached your invoice from Sirvi Brothers.`
+                                text: `Invoice from Sirvi Brothers\nThank you for your business!`
                             });
                         } else {
                             alert('Sharing not supported on this device. Downloading instead...');
@@ -641,6 +644,61 @@ document.addEventListener('DOMContentLoaded', () => {
                         btn.innerHTML = originalHtml;
                         btn.disabled = false;
                     }
+                }
+            });
+        });
+
+        document.querySelectorAll('.download-sale-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                if (sale) {
+                    const btn = e.currentTarget;
+                    const originalHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+                    btn.disabled = true;
+                    try {
+                        await PDFGenerator.generate(sale);
+                    } catch (error) {
+                        console.error("Download failed", error);
+                    } finally {
+                        btn.innerHTML = originalHtml;
+                        btn.disabled = false;
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('.wa-share-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const invoiceNo = parseInt(e.currentTarget.dataset.id);
+                const sale = StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                if (sale) {
+                    let itemsText = sale.items.map((i, idx) => `${idx + 1}. ${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.amount.toFixed(2)}`).join('\n');
+                    
+                    let text = `*Sirvi Brothers - Invoice #${sale.invoiceNo}*\n`;
+                    text += `Date: ${sale.date}\n`;
+                    text += `Customer: ${sale.buyerName}\n\n`;
+                    text += `*Items:*\n${itemsText}\n\n`;
+                    text += `*Total Amount:* ₹${sale.total.toFixed(2)}\n`;
+                    if (sale.dueAmount > 0) {
+                        text += `*Paid:* ₹${sale.paidAmount.toFixed(2)}\n`;
+                        text += `*Due Amount:* ₹${sale.dueAmount.toFixed(2)}\n`;
+                    }
+                    text += `\nThank you for your business!`;
+                    
+                    const encodedText = encodeURIComponent(text);
+                    
+                    let waUrl = `https://wa.me/`;
+                    if (sale.mobile) {
+                        // Ensure 91 prefix if not present (assuming Indian mobile numbers)
+                        let mobileStr = sale.mobile.replace(/\D/g, '');
+                        if (mobileStr.length === 10) mobileStr = '91' + mobileStr;
+                        waUrl += mobileStr;
+                    }
+                    waUrl += `?text=${encodedText}`;
+                    
+                    window.open(waUrl, '_blank');
                 }
             });
         });
@@ -1084,7 +1142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveInvBtn = document.getElementById('save-inv-btn');
     const addInvBtn = document.getElementById('add-inventory-btn');
 
-    let currentInventoryFilter = 'all';
+
 
     document.querySelectorAll('#inventory-filters .filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -1491,15 +1549,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (topLiveBalance) {
             topLiveBalance.textContent = `₹ ${totalDueBalance.toFixed(2)}`;
         }
-    }
-    
-    // Passbook Toggle
-    const passbookToggleBtn = document.getElementById('passbook-toggle-btn');
-    const passbookDropdown = document.getElementById('passbook-dropdown');
-    if (passbookToggleBtn && passbookDropdown) {
-        passbookToggleBtn.addEventListener('click', () => {
-            passbookDropdown.style.display = passbookDropdown.style.display === 'none' ? 'block' : 'none';
-        });
     }
 
     // Payment Modal Actions
