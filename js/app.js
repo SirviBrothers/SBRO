@@ -531,34 +531,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dueAmount = total - paidAmount;
 
         const billData = {
-            invoiceNo,
-            date,
-            buyerName,
-            mobile,
-            gstn,
-            address,
-            paymentMethod: dueAmount > 0 ? 'Credit' : 'Cash/Online',
-            paidAmount,
-            dueAmount,
-            items,
-            total
-        };
+    invoiceNo,
+    date,
+    buyerName,
+    mobile,
+    gstn,
+    address,
+    subtotal: total,
+    discount: 0,
+    grandTotal: total,
+    receivedAmt: paidAmount,
+    balance: dueAmount,
+    paymentMode: dueAmount > 0 ? 'Credit' : 'Cash/Online',
+    remarks: '',
+    items
+};
 
-        // Save Data
-        await StorageManager.saveSale(billData, editingInvoiceNo !== null);
+// Save Data
+await StorageManager.saveSale(billData, editingInvoiceNo !== null);
 
-        if (dueAmount > 0) {
-            const dueDate = document.getElementById('due-date').value;
-            await StorageManager.saveCredit({
-                ...billData,
-                total: dueAmount, // Override total for the credit section
-                dueDate
-            }, editingInvoiceNo !== null);
-        } else if (editingInvoiceNo !== null) {
-            await StorageManager.removeCredit(editingInvoiceNo);
-        }
-        
-        editingInvoiceNo = null;
+editingInvoiceNo = null;
         document.querySelector('#billing-tab .page-header h1').textContent = 'New Bill';
         
         return billData;
