@@ -67,9 +67,10 @@ class StorageManager {
     
     static async checkStock(category, brand, variant, qty) {
         const inventory = await this.getInventory();
-        const item = inventory.find(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (!item) return false;
-        return item.quantity >= qty;
+        const items = inventory.filter(i => i.category === category && i.brand === brand && i.variant === variant);
+        if (items.length === 0) return false;
+        const totalQty = items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0);
+        return totalQty >= qty;
     }
     
     static async getInventory() {
@@ -194,11 +195,29 @@ class StorageManager {
     
     static async deductStock(category, brand, variant, qty) {
         const inventory = await this.getInventory();
-        const item = inventory.find(i => i.category === category && i.brand === brand && i.variant === variant);
-        if (item) {
+        const items = inventory.filter(i => i.category === category && i.brand === brand && i.variant === variant);
+        let remainingToDeduct = parseFloat(qty) || 0;
+        
+        for (const item of items) {
+            if (remainingToDeduct <= 0) break;
+            const itemQty = parseFloat(item.quantity) || 0;
+            const deductFromThis = Math.min(itemQty, remainingToDeduct);
+            
+            if (deductFromThis > 0) {
+                await this.client.from('inventory').update({
+                    quantity: itemQty - deductFromThis
+                }).eq('id', item.id);
+                remainingToDeduct -= deductFromThis;
+            }
+        }
+        
+        // If there's still remainder (meaning they forced deduction below 0), subtract from the first item
+        if (remainingToDeduct > 0 && items.length > 0) {
+            const firstItem = items[0];
+            const itemQty = parseFloat(firstItem.quantity) || 0;
             await this.client.from('inventory').update({
-                quantity: item.quantity - parseFloat(qty)
-            }).eq('id', item.id);
+                quantity: itemQty - remainingToDeduct
+            }).eq('id', firstItem.id);
         }
     }
 

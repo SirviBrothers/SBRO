@@ -301,7 +301,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             hsnInput.value = '';
             if (cat && brand) {
                 const variants = inventory.filter(i => i.category === cat && i.brand === brand);
+                const uniqueVariants = {};
                 variants.forEach(v => {
+                    if (!uniqueVariants[v.variant]) uniqueVariants[v.variant] = { ...v, quantity: 0 };
+                    uniqueVariants[v.variant].quantity += parseFloat(v.quantity) || 0;
+                });
+                Object.values(uniqueVariants).forEach(v => {
                     varSelect.innerHTML += `<option value="${v.variant}">${v.variant} (Stock: ${v.quantity})</option>`;
                 });
             }
