@@ -64,6 +64,14 @@ class StorageManager {
     // ==========================================
     // INVENTORY
     // ==========================================
+    
+    static async checkStock(category, brand, variant, qty) {
+        const inventory = await this.getInventory();
+        const item = inventory.find(i => i.category === category && i.brand === brand && i.variant === variant);
+        if (!item) return false;
+        return item.quantity >= qty;
+    }
+    
     static async getInventory() {
         const { data, error } = await this.client.from('inventory').select('*').order('category', { ascending: true });
         if (error) console.error("Error fetching inventory:", error);
@@ -183,6 +191,39 @@ class StorageManager {
         await this.autoRegisterParty(saleData.buyerName, saleData.mobile, saleData.address, saleData.gstn);
     }
 
+    
+    static async deductStock(category, brand, variant, qty) {
+        const inventory = await this.getInventory();
+        const item = inventory.find(i => i.category === category && i.brand === brand && i.variant === variant);
+        if (item) {
+            await this.client.from('inventory').update({
+                quantity: item.quantity - parseFloat(qty)
+            }).eq('id', item.id);
+        }
+    }
+
+    static async revertSaleStock(invoiceNo) {
+        const sales = await this.getSales();
+        const sale = sales.find(s => s.invoice_no === invoiceNo || s.invoiceNo === invoiceNo);
+        if (sale && sale.sale_items) {
+            for (const item of sale.sale_items) {
+                const inventory = await this.getInventory();
+                const invItem = inventory.find(i => i.category === item.category && i.brand === item.brand && i.variant === item.variant);
+                if (invItem) {
+                    await this.client.from('inventory').update({
+                        quantity: invItem.quantity + parseFloat(item.quantity)
+                    }).eq('id', invItem.id);
+                }
+            }
+        }
+    }
+    
+    
+    static async updateCreditStatus(creditId, status) {
+        // Mock for now until full credit module is built
+        console.log('Update credit status:', creditId, status);
+    }
+    
     static async getNextInvoiceNo() {
         const { data, error } = await this.client.from('sales')
             .select('invoice_no')

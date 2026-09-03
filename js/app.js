@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addRowBtn = document.getElementById('add-row-btn');
     const itemsTbody = document.querySelector('#items-table tbody');
 
-    function createRow(itemData = null) {
+    async function createRow(itemData = null) {
         const inventory = await StorageManager.getInventory();
         const categories = [...new Set(inventory.map(i => i.category))];
 
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .sort((a, b) => b.id - a.id) // Newest first
                     .slice(0, 3); // Last 3 purchases
 
-                const credits = await StorageManager.getCredits().filter(c => c.buyerName.toLowerCase() === typedName);
+                const credits = (await StorageManager.getCredits()).filter(c => c.buyerName.toLowerCase() === typedName);
                 const totalDue = credits.reduce((sum, c) => {
                     const paid = c.payments.reduce((pSum, p) => pSum + p.amount, 0);
                     return sum + (c.dueAmount - paid);
@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         recalculateDueAmount();
     }
 
-    function processBillData() {
+    async function processBillData() {
         const date = document.getElementById('bill-date').value;
         const buyerName = document.getElementById('buyer-name').value.trim();
         const mobile = document.getElementById('buyer-mobile').value.trim();
@@ -457,11 +457,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             await StorageManager.revertSaleStock(editingInvoiceNo);
         }
 
-        items.forEach(item => {
+        for (const item of items) {
             await StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
-        });
+        }
 
-        const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNumber();
+        const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNo();
         const total = totalAmount;
         let paidAmount = parseFloat(paidAmountInput.value);
         if (isNaN(paidAmount)) paidAmount = 0;
@@ -517,7 +517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Save Bill Button
     const saveBtn = document.getElementById('save-bill-btn');
     saveBtn.addEventListener('click', async () => {
-        const billData = processBillData();
+        const billData = await processBillData();
         if (billData) {
             resetForm();
             alert('Bill saved successfully!');
@@ -527,7 +527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Download Bill Button
     const downloadBtn = document.getElementById('download-bill-btn');
     downloadBtn.addEventListener('click', async () => {
-        const billData = processBillData();
+        const billData = await processBillData();
         if (billData) {
             downloadBtn.disabled = true;
             downloadBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Downloading...';
@@ -545,7 +545,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Share Bill Button
     const shareBtn = document.getElementById('share-bill-btn');
     if (shareBtn) shareBtn.addEventListener('click', async () => {
-        const billData = processBillData();
+        const billData = await processBillData();
         if (billData) {
             shareBtn.disabled = true;
             shareBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Preparing...';
@@ -618,7 +618,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.share-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
                     const originalHtml = btn.innerHTML;
@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.download-sale-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     const btn = e.currentTarget;
                     const originalHtml = btn.innerHTML;
@@ -672,7 +672,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.wa-share-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const invoiceNo = parseInt(e.currentTarget.dataset.id);
-                const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+                const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
                     let itemsText = sale.items.map((i, idx) => `${idx + 1}. ${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.amount.toFixed(2)}`).join('\n');
                     
@@ -715,8 +715,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('sales-month').textContent = `₹ ${monthTotal.toFixed(2)}`;
     }
 
-    function loadBillIntoForm(invoiceNo) {
-        const sale = await StorageManager.getSales().find(s => s.invoiceNo === invoiceNo);
+    async function loadBillIntoForm(invoiceNo) {
+        const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
         if (!sale) return;
 
         // Switch to billing tab
@@ -735,14 +735,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         paidAmountInput.value = sale.paidAmount;
 
         itemsTbody.innerHTML = '';
-        sale.items.forEach(item => {
-            createRow(item);
-        });
+        for (const item of sale.items) {
+            await createRow(item);
+        }
 
         calculateGrandTotal();
 
         if (sale.dueAmount > 0) {
-            const credit = await StorageManager.getCredits().find(c => c.invoiceNo === invoiceNo);
+            const credit = (await StorageManager.getCredits()).find(c => c.invoiceNo === invoiceNo);
             if (credit && credit.dueDate) {
                 document.getElementById('due-date').value = credit.dueDate;
             }
@@ -755,7 +755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tbody = document.querySelector('#credit-history-table tbody');
         tbody.innerHTML = '';
 
-        credits.slice().reverse().forEach(credit => {
+        for (const credit of credits.slice().reverse()) {
             const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
             const remaining = credit.total - totalPaid;
             
@@ -783,7 +783,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </td>
             `;
             tbody.appendChild(tr);
-        });
+        }
 
         document.querySelectorAll('.mark-paid-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -813,7 +813,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.edit-date-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const credit = await StorageManager.getCredits().find(c => c.id === id);
+                const credit = (await StorageManager.getCredits()).find(c => c.id === id);
                 if (credit) {
                     document.getElementById('edit-date-credit-id').value = id;
                     document.getElementById('edit-target-date').value = credit.dueDate;
@@ -833,8 +833,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderPassbook();
     }
 
-    function renderPaymentHistory(creditId) {
-        const credit = await StorageManager.getCredits().find(c => c.id === creditId);
+    async function renderPaymentHistory(creditId) {
+        const credit = async (await StorageManager.getCredits()).find(c => c.id === creditId);
         const tbody = document.querySelector('#payment-history-table tbody');
         tbody.innerHTML = '';
         
@@ -870,7 +870,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- PARTIES DATALIST ---
-    function updatePartiesDatalist() {
+    async function updatePartiesDatalist() {
         const parties = await StorageManager.getParties();
         const datalist = document.getElementById('parties-list');
         if (datalist) {
@@ -932,7 +932,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let purchaseItemsCount = 0;
     
-    function createPurchaseRow() {
+    async function createPurchaseRow() {
         purchaseItemsCount++;
         const inventory = await StorageManager.getInventory();
         const categories = [...new Set(inventory.map(i => i.category))];
@@ -1282,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.stock-cell').forEach(cell => {
             cell.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const item = await StorageManager.getInventory().find(i => i.id === id);
+                const item = (await StorageManager.getInventory()).find(i => i.id === id);
                 if (item) {
                     document.getElementById('modal-title').textContent = 'Edit Inventory Item';
                     document.getElementById('inv-id-input').value = item.id;
@@ -1412,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.edit-party-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = parseInt(e.currentTarget.dataset.id);
-                const party = await StorageManager.getParties().find(p => p.id === id);
+                const party = (await StorageManager.getParties()).find(p => p.id === id);
                 if (party) {
                     document.getElementById('party-modal-title').textContent = 'Edit Customer';
                     document.getElementById('party-id-input').value = party.id;
@@ -1492,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- PASSBOOK & MODALS LOGIC ---
-    function renderPassbook() {
+    async function renderPassbook() {
         const credits = await StorageManager.getCredits();
         const tbody = document.querySelector('#passbook-table tbody');
         if(!tbody) return;
