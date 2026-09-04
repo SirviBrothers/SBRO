@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if session is already unlocked
     if (sessionStorage.getItem('dashboard_unlocked') === 'true') {
         if (overlay) overlay.style.display = 'none';
+        if (window.WhatsAppReporter) {
+            window.WhatsAppReporter.triggerOnLogin();
+        }
     }
     
     if (!overlay) return;
@@ -107,6 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 overlay.style.display = 'none';
             }, 300);
+            
+            // Trigger Automated WhatsApp Credit & Due Digest
+            if (window.WhatsAppReporter) {
+                window.WhatsAppReporter.triggerOnLogin();
+            }
         } else {
             errorMsg.textContent = "Incorrect Access Code.";
             inputs.forEach(input => {
