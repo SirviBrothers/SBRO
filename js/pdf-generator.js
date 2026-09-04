@@ -27,32 +27,40 @@ class PDFGenerator {
         const tbody = document.querySelector('#inv-items-table tbody');
         tbody.innerHTML = '';
         
-        billData.items.forEach((item, index) => {
+        (billData.items || []).forEach((item, index) => {
+            const price = parseFloat(item.price) || 0;
+            const qty = parseFloat(item.qty || item.quantity) || 0;
+            const amount = parseFloat(item.amount || item.total) || (price * qty);
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${index + 1}</td>
-                <td style="text-align: left;">${item.category} - ${item.brand} (${item.variant})</td>
+                <td style="text-align: left;">${item.category || ''} - ${item.brand || ''} (${item.variant || ''})</td>
                 <td style="text-align: center;">${item.hsn || ''}</td>
-                <td style="text-align: center;">${item.qty}</td>
-                <td style="text-align: right;">₹ ${item.price.toFixed(2)}</td>
-                <td style="text-align: right;">₹ ${item.amount.toFixed(2)}</td>
+                <td style="text-align: center;">${qty}</td>
+                <td style="text-align: right;">₹ ${price.toFixed(2)}</td>
+                <td style="text-align: right;">₹ ${amount.toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });
 
-        document.getElementById('inv-total-amount').innerText = `₹ ${billData.total.toFixed(2)}`;
+        const totalAmt = parseFloat(billData.total || billData.grandTotal) || 0;
+        const paidAmt = parseFloat(billData.paidAmount || billData.receivedAmt) || 0;
+        const dueAmt = parseFloat(billData.dueAmount || billData.balance) || Math.max(0, totalAmt - paidAmt);
+
+        document.getElementById('inv-total-amount').innerText = `₹ ${totalAmt.toFixed(2)}`;
         
-        if (billData.dueAmount > 0) {
+        if (dueAmt > 0) {
             document.getElementById('inv-paid-row').style.display = 'table-row';
-            document.getElementById('inv-paid-amount').innerText = `₹ ${billData.paidAmount.toFixed(2)}`;
+            document.getElementById('inv-paid-amount').innerText = `₹ ${paidAmt.toFixed(2)}`;
             document.getElementById('inv-due-row').style.display = 'table-row';
-            document.getElementById('inv-due-amount').innerText = `₹ ${billData.dueAmount.toFixed(2)}`;
+            document.getElementById('inv-due-amount').innerText = `₹ ${dueAmt.toFixed(2)}`;
         } else {
             document.getElementById('inv-paid-row').style.display = 'none';
             document.getElementById('inv-due-row').style.display = 'none';
         }
 
-        document.getElementById('inv-amount-words').innerText = numberToWords(Math.round(billData.total));
+        document.getElementById('inv-amount-words').innerText = numberToWords(Math.round(totalAmt));
 
         const element = document.getElementById('invoice-template');
         return element;

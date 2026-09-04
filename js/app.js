@@ -315,7 +315,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function createRow(itemData = null) {
         const inventory = await StorageManager.getInventory();
-        const categories = [...new Set(inventory.map(i => i.category))];
+        let categories = [...new Set(inventory.map(i => i.category))];
+        if (categories.length === 0 && typeof CATEGORIES !== 'undefined') {
+            categories = CATEGORIES;
+        }
 
         const tr = document.createElement('tr');
         
@@ -364,7 +367,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             brandSelect.innerHTML = `<option value="">Select</option>`;
             varSelect.innerHTML = `<option value="">Select</option>`;
             if (cat) {
-                const brands = [...new Set(inventory.filter(i => i.category === cat).map(i => i.brand))];
+                let brands = [...new Set(inventory.filter(i => i.category === cat).map(i => i.brand))];
+                if (brands.length === 0 && typeof INVENTORY !== 'undefined' && INVENTORY[cat]) {
+                    brands = INVENTORY[cat].brands || [];
+                }
                 brands.forEach(b => brandSelect.innerHTML += `<option value="${b}">${b}</option>`);
             }
         });
@@ -376,14 +382,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             hsnInput.value = '';
             if (cat && brand) {
                 const variants = inventory.filter(i => i.category === cat && i.brand === brand);
-                const uniqueVariants = {};
-                variants.forEach(v => {
-                    if (!uniqueVariants[v.variant]) uniqueVariants[v.variant] = { ...v, quantity: 0 };
-                    uniqueVariants[v.variant].quantity += parseFloat(v.quantity) || 0;
-                });
-                Object.values(uniqueVariants).forEach(v => {
-                    varSelect.innerHTML += `<option value="${v.variant}">${v.variant} (Stock: ${v.quantity})</option>`;
-                });
+                if (variants.length > 0) {
+                    const uniqueVariants = {};
+                    variants.forEach(v => {
+                        if (!uniqueVariants[v.variant]) uniqueVariants[v.variant] = { ...v, quantity: 0 };
+                        uniqueVariants[v.variant].quantity += parseFloat(v.quantity) || 0;
+                    });
+                    Object.values(uniqueVariants).forEach(v => {
+                        varSelect.innerHTML += `<option value="${v.variant}">${v.variant} (Stock: ${v.quantity})</option>`;
+                    });
+                } else if (typeof INVENTORY !== 'undefined' && INVENTORY[cat] && INVENTORY[cat].variants) {
+                    INVENTORY[cat].variants.forEach(v => {
+                        varSelect.innerHTML += `<option value="${v}">${v} (Stock: 0)</option>`;
+                    });
+                }
             }
         });
 
@@ -395,6 +407,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const item = inventory.find(i => i.category === cat && i.brand === brand && i.variant === variant);
                 if (item) {
                     hsnInput.value = item.hsn || getHsnForCategory(cat);
+                } else {
+                    hsnInput.value = getHsnForCategory(cat);
                 }
             } else {
                 hsnInput.value = '';
@@ -431,10 +445,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             brandSelect.dispatchEvent(new Event('change'));
             varSelect.value = itemData.variant;
             varSelect.dispatchEvent(new Event('change'));
-            priceInput.value = itemData.price;
-            qtyInput.value = itemData.qty;
-            amountDisplay.textContent = `₹ ${itemData.amount.toFixed(2)}`;
-            amountDisplay.dataset.value = itemData.amount;
+            priceInput.value = itemData.price || 0;
+            qtyInput.value = itemData.qty || 1;
+            const itemAmt = parseFloat(itemData.amount || itemData.total) || ((parseFloat(itemData.price) || 0) * (parseFloat(itemData.qty) || 1));
+            amountDisplay.textContent = `₹ ${itemAmt.toFixed(2)}`;
+            amountDisplay.dataset.value = itemAmt;
         }
 
         itemsTbody.appendChild(tr);
@@ -604,20 +619,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         let paidAmount = parseFloat(paidAmountInput.value);
         if (isNaN(paidAmount)) paidAmount = 0;
         const dueAmount = total - paidAmount;
+        const dueDateInput = document.getElementById('due-date');
+        const dueDate = (dueDateInput && dueAmount > 0) ? dueDateInput.value : '';
 
         const billData = {
-    invoiceNo,
-    date,
-    buyerName,
-    mobile,
-    gstn,
-    address,
-    paymentMethod: dueAmount > 0 ? 'Credit' : 'Cash/Online',
-    paidAmount,
-    dueAmount,
-    items,
-    total
-};
+            invoiceNo,
+            date,
+            buyerName,
+            mobile,
+            gstn,
+            address,
+            paymentMethod: dueAmount > 0 ? 'Credit' : 'Cash/Online',
+            paidAmount,
+            dueAmount,
+            dueDate,
+            items,
+            total
+        };
 
 // Save Data
 await StorageManager.saveSale(billData, editingInvoiceNo !== null);
@@ -801,16 +819,25 @@ editingInvoiceNo = null;
                 const invoiceNo = e.currentTarget.dataset.id;
                 const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
                 if (sale) {
-                    let itemsText = sale.items.map((i, idx) => `${idx + 1}. ${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.amount.toFixed(2)}`).join('\n');
+                    let itemsText = (sale.items || []).map((i, idx) => {
+                        const p = parseFloat(i.price) || 0;
+                        const q = parseFloat(i.qty || i.quantity) || 0;
+                        const a = parseFloat(i.amount || i.total) || (p * q);
+                        return `${idx + 1}. ${i.category || ''} - ${i.brand || ''} (${i.variant || ''}) x ${q} - ₹${a.toFixed(2)}`;
+                    }).join('\n');
                     
+                    const sTotal = parseFloat(sale.total || sale.grandTotal) || 0;
+                    const sPaid = parseFloat(sale.paidAmount || sale.receivedAmt) || 0;
+                    const sDue = parseFloat(sale.dueAmount || sale.balance) || 0;
+
                     let text = `*Sirvi Brothers - Invoice #${sale.invoiceNo}*\n`;
                     text += `Date: ${sale.date}\n`;
                     text += `Customer: ${sale.buyerName}\n\n`;
                     text += `*Items:*\n${itemsText}\n\n`;
-                    text += `*Total Amount:* ₹${sale.total.toFixed(2)}\n`;
-                    if (sale.dueAmount > 0) {
-                        text += `*Paid:* ₹${sale.paidAmount.toFixed(2)}\n`;
-                        text += `*Due Amount:* ₹${sale.dueAmount.toFixed(2)}\n`;
+                    text += `*Total Amount:* ₹${sTotal.toFixed(2)}\n`;
+                    if (sDue > 0) {
+                        text += `*Paid:* ₹${sPaid.toFixed(2)}\n`;
+                        text += `*Due Amount:* ₹${sDue.toFixed(2)}\n`;
                     }
                     text += `\nThank you for your business!`;
                     
@@ -862,7 +889,8 @@ editingInvoiceNo = null;
         paidAmountInput.value = sale.paidAmount;
 
         itemsTbody.innerHTML = '';
-        for (const item of sale.items) {
+        for (const item of (sale.items || [])) {
+            item.amount = parseFloat(item.amount || item.total) || ((parseFloat(item.price) || 0) * (parseFloat(item.qty) || 1));
             await createRow(item);
         }
 
@@ -884,7 +912,7 @@ editingInvoiceNo = null;
 
         for (const credit of credits.slice().reverse()) {
             const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
-            const remaining = credit.total - totalPaid;
+            const remaining = Math.max(0, (credit.total || 0) - totalPaid);
             
             // Auto update status if math shows paid but status doesn't
             if (remaining <= 0 && credit.status !== 'Paid') {
@@ -894,17 +922,17 @@ editingInvoiceNo = null;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${credit.date}</td>
-                <td>${credit.buyerName}</td>
+                <td>${credit.date || 'N/A'}</td>
+                <td>${credit.buyerName || 'N/A'} <span style="font-size:0.75rem; color:#6B7280;">(${credit.type || 'Sale'})</span></td>
                 <td>${credit.mobile || 'N/A'}</td>
                 <td class="amount-red">₹ ${remaining.toFixed(2)}</td>
-                <td>${credit.dueDate}</td>
-                <td><span class="badge ${credit.status === 'Paid' ? 'success' : 'warning'}">${credit.status}</span></td>
+                <td>${credit.dueDate || 'N/A'}</td>
+                <td><span class="badge ${credit.status === 'Paid' ? 'success' : 'warning'}">${credit.status || 'Pending'}</span></td>
                 <td>
-                    ${credit.status === 'Pending' ? `
-                        <button class="btn btn-success btn-sm mark-paid-btn" data-id="${credit.id}">Mark Paid</button>
-                        <button class="btn btn-secondary btn-sm part-pay-btn" data-id="${credit.id}">Part Pay</button>
-                        <button class="btn btn-secondary btn-sm edit-date-btn" data-id="${credit.id}">Edit Date</button>
+                    ${credit.status !== 'Paid' ? `
+                        <button class="btn btn-success btn-sm mark-paid-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Mark Paid</button>
+                        <button class="btn btn-secondary btn-sm part-pay-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Part Pay</button>
+                        <button class="btn btn-secondary btn-sm edit-date-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Edit Date</button>
                     ` : ''}
                     <button class="btn btn-secondary btn-sm view-history-btn" data-id="${credit.id}"><i class="ph ph-clock-counter-clockwise"></i> History</button>
                 </td>
@@ -914,9 +942,18 @@ editingInvoiceNo = null;
 
         document.querySelectorAll('.mark-paid-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.dataset.id;
+                const id = e.currentTarget.dataset.id;
+                const type = e.currentTarget.dataset.type || 'Sale';
                 document.getElementById('payment-modal-title').textContent = 'Mark as Fully Paid';
                 document.getElementById('payment-credit-id').value = id;
+                let typeInput = document.getElementById('payment-credit-type');
+                if (!typeInput) {
+                    typeInput = document.createElement('input');
+                    typeInput.type = 'hidden';
+                    typeInput.id = 'payment-credit-type';
+                    document.getElementById('payment-modal').appendChild(typeInput);
+                }
+                typeInput.value = type;
                 document.getElementById('payment-type').value = 'full';
                 document.getElementById('payment-date').valueAsDate = new Date();
                 document.getElementById('payment-amount-group').style.display = 'none';
@@ -926,9 +963,18 @@ editingInvoiceNo = null;
 
         document.querySelectorAll('.part-pay-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.dataset.id;
+                const id = e.currentTarget.dataset.id;
+                const type = e.currentTarget.dataset.type || 'Sale';
                 document.getElementById('payment-modal-title').textContent = 'Record Part Payment';
                 document.getElementById('payment-credit-id').value = id;
+                let typeInput = document.getElementById('payment-credit-type');
+                if (!typeInput) {
+                    typeInput = document.createElement('input');
+                    typeInput.type = 'hidden';
+                    typeInput.id = 'payment-credit-type';
+                    document.getElementById('payment-modal').appendChild(typeInput);
+                }
+                typeInput.value = type;
                 document.getElementById('payment-type').value = 'part';
                 document.getElementById('payment-date').valueAsDate = new Date();
                 document.getElementById('payment-amount-group').style.display = 'block';
@@ -940,10 +986,20 @@ editingInvoiceNo = null;
         document.querySelectorAll('.edit-date-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
-                const credit = (await StorageManager.getCredits()).find(c => c.id === id);
+                const type = e.currentTarget.dataset.type || 'Sale';
+                const credits = await StorageManager.getCredits();
+                const credit = credits.find(c => String(c.id) === String(id));
                 if (credit) {
                     document.getElementById('edit-date-credit-id').value = id;
-                    document.getElementById('edit-target-date').value = credit.dueDate;
+                    let editTypeInput = document.getElementById('edit-date-credit-type');
+                    if (!editTypeInput) {
+                        editTypeInput = document.createElement('input');
+                        editTypeInput.type = 'hidden';
+                        editTypeInput.id = 'edit-date-credit-type';
+                        document.getElementById('edit-date-modal').appendChild(editTypeInput);
+                    }
+                    editTypeInput.value = type;
+                    document.getElementById('edit-target-date').value = credit.dueDate || '';
                     document.getElementById('edit-date-modal').style.display = 'flex';
                 }
             });
@@ -961,8 +1017,10 @@ editingInvoiceNo = null;
     }
 
     async function renderPaymentHistory(creditId) {
-        const credit = async (await StorageManager.getCredits()).find(c => c.id === creditId);
+        const credits = await StorageManager.getCredits();
+        const credit = credits.find(c => String(c.id) === String(creditId));
         const tbody = document.querySelector('#payment-history-table tbody');
+        if (!tbody) return;
         tbody.innerHTML = '';
         
         if (!credit || !credit.payments || credit.payments.length === 0) {
@@ -974,7 +1032,7 @@ editingInvoiceNo = null;
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${payment.date}</td>
-                <td>₹ ${payment.amount.toFixed(2)}</td>
+                <td>₹ ${(parseFloat(payment.amount) || 0).toFixed(2)}</td>
                 <td>
                     <button class="btn btn-secondary btn-sm delete-payment-btn" data-credit-id="${creditId}" data-index="${index}"><i class="ph ph-trash"></i></button>
                 </td>
@@ -985,8 +1043,8 @@ editingInvoiceNo = null;
         document.querySelectorAll('.delete-payment-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 if (confirm('Are you sure you want to delete this payment?')) {
-                    const cId = parseInt(e.currentTarget.dataset.creditId);
-                    const pIdx = parseInt(e.currentTarget.dataset.index);
+                    const cId = e.currentTarget.dataset.creditId;
+                    const pIdx = parseInt(e.currentTarget.dataset.index, 10);
                     await StorageManager.removePaymentFromCredit(cId, pIdx);
                     renderPaymentHistory(cId);
                     renderCreditTable();
@@ -1219,6 +1277,7 @@ editingInvoiceNo = null;
             const gstn = document.getElementById('purchase-vendor-gstn').value || '';
             
             await StorageManager.savePurchase({
+                billNo: 'PUR-' + Date.now().toString().slice(-6),
                 vendorName,
                 date,
                 mobile: document.getElementById('purchase-vendor-mobile').value || '',
@@ -1252,7 +1311,7 @@ editingInvoiceNo = null;
         if (!tbody) return;
         
         tbody.innerHTML = '';
-        const purchases = await StorageManager.getPurchases().reverse(); // Newest first
+        const purchases = (await StorageManager.getPurchases()).slice().reverse(); // Newest first
 
         if (purchases.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No purchases found.</td></tr>';
@@ -1264,8 +1323,8 @@ editingInvoiceNo = null;
             tr.innerHTML = `
                 <td>${p.date}</td>
                 <td>${p.vendorName}</td>
-                <td>${p.items.length}</td>
-                <td>₹ ${p.totalAmount.toFixed(2)}</td>
+                <td>${(p.items || []).length}</td>
+                <td>₹ ${(parseFloat(p.totalAmount || p.total) || 0).toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -1547,7 +1606,7 @@ editingInvoiceNo = null;
         document.querySelectorAll('.edit-party-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
-                const party = (await StorageManager.getParties()).find(p => p.id === id);
+                const party = (await StorageManager.getParties()).find(p => String(p.id) === String(id));
                 if (party) {
                     document.getElementById('party-modal-title').textContent = 'Edit Customer';
                     document.getElementById('party-id-input').value = party.id;
@@ -1601,7 +1660,7 @@ editingInvoiceNo = null;
             }
             
             await StorageManager.saveParty({
-                id: id ? parseInt(id) : undefined,
+                id: id ? id : undefined,
                 name,
                 mobile,
                 gstn,
@@ -1692,9 +1751,10 @@ editingInvoiceNo = null;
     });
 
     document.getElementById('save-payment-btn')?.addEventListener('click', async () => {
-        const id = parseInt(document.getElementById('payment-credit-id').value);
+        const id = document.getElementById('payment-credit-id').value;
         const type = document.getElementById('payment-type').value;
         const date = document.getElementById('payment-date').value;
+        const creditType = document.getElementById('payment-credit-type')?.value || 'Sale';
         
         if (!date) {
             alert('Please select a date.');
@@ -1702,14 +1762,14 @@ editingInvoiceNo = null;
         }
 
         if (type === 'full') {
-            await StorageManager.markCreditAsPaid(id, date);
+            await StorageManager.markCreditAsPaid(id, date, creditType);
         } else if (type === 'part') {
             const amount = parseFloat(document.getElementById('payment-amount').value);
             if (isNaN(amount) || amount <= 0) {
                 alert('Please enter a valid amount.');
                 return;
             }
-            await StorageManager.addPaymentToCredit(id, amount, date);
+            await StorageManager.addPaymentToCredit(id, amount, date, 'Cash', '', creditType);
         }
         
         document.getElementById('payment-modal').style.display = 'none';
@@ -1723,15 +1783,16 @@ editingInvoiceNo = null;
     });
 
     document.getElementById('save-edit-date-btn')?.addEventListener('click', async () => {
-        const id = parseInt(document.getElementById('edit-date-credit-id').value);
+        const id = document.getElementById('edit-date-credit-id').value;
         const newDate = document.getElementById('edit-target-date').value;
+        const creditType = document.getElementById('edit-date-credit-type')?.value || 'Sale';
         
         if (!newDate) {
             alert('Please select a date.');
             return;
         }
         
-        await StorageManager.updateCreditDueDate(id, newDate);
+        await StorageManager.updateCreditDueDate(id, newDate, creditType);
         document.getElementById('edit-date-modal').style.display = 'none';
         renderCreditTable();
     });
