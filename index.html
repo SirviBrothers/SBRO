@@ -117,23 +117,76 @@
             
             <!-- Tab: Passbook -->
             <section id="passbook-tab" class="tab-pane">
-                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h1>Passbook Ledger</h1>
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Passbook Ledger</h1>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-muted);">
+                            Real-time transaction statement, cash flow ledger & cumulative balance
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn btn-secondary btn-sm" id="print-passbook-btn" onclick="window.print()" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.9rem; font-weight: 500;">
+                            <i class="ph ph-printer"></i> Print Statement
+                        </button>
+                    </div>
                 </div>
                 
-                <div class="stats-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-top: 1rem; margin-bottom: 1rem;">
-                    <div class="stat-card" style="border-left: 4px solid var(--success-color);">
-                        <div class="stat-icon" style="color: var(--success-color); background: rgba(16, 185, 129, 0.1);"><i class="ph ph-arrow-down-left"></i></div>
+                <!-- KPI Summary Cards -->
+                <div class="stats-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-top: 1rem; margin-bottom: 1.25rem;">
+                    <div class="stat-card" style="border-left: 4px solid var(--success-color); background: white;">
+                        <div class="stat-icon" style="color: var(--success-color); background: rgba(16, 185, 129, 0.1);"><i class="ph ph-trend-up"></i></div>
                         <div class="stat-details">
-                            <h3>Total Sales</h3>
-                            <p id="passbook-total-sales" style="color: var(--success-color); font-weight: 700; font-size: 1.4rem;">₹ 0.00</p>
+                            <h3 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Total Inflow (Cash In)</h3>
+                            <p id="passbook-total-sales" style="color: var(--success-color); font-weight: 700; font-size: 1.35rem; margin: 0;">₹ 0.00</p>
                         </div>
                     </div>
-                    <div class="stat-card" style="border-left: 4px solid var(--danger-color);">
-                        <div class="stat-icon" style="color: var(--danger-color); background: rgba(239, 68, 68, 0.1);"><i class="ph ph-arrow-up-right"></i></div>
+                    <div class="stat-card" style="border-left: 4px solid var(--danger-color); background: white;">
+                        <div class="stat-icon" style="color: var(--danger-color); background: rgba(239, 68, 68, 0.1);"><i class="ph ph-trend-down"></i></div>
                         <div class="stat-details">
-                            <h3>Total Purchases</h3>
-                            <p id="passbook-total-purchases" style="color: var(--danger-color); font-weight: 700; font-size: 1.4rem;">₹ 0.00</p>
+                            <h3 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Total Outflow (Cash Out)</h3>
+                            <p id="passbook-total-purchases" style="color: var(--danger-color); font-weight: 700; font-size: 1.35rem; margin: 0;">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid var(--primary-color); background: white;">
+                        <div class="stat-icon" style="color: var(--primary-color); background: rgba(37, 99, 235, 0.1);"><i class="ph ph-wallet"></i></div>
+                        <div class="stat-details">
+                            <h3 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Net Cash Balance</h3>
+                            <p id="passbook-net-balance" style="color: var(--primary-color); font-weight: 700; font-size: 1.35rem; margin: 0;">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #F59E0B; background: white;">
+                        <div class="stat-icon" style="color: #F59E0B; background: rgba(245, 158, 11, 0.1);"><i class="ph ph-clock-countdown"></i></div>
+                        <div class="stat-details">
+                            <h3 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Market Due (Receivables)</h3>
+                            <p id="passbook-total-due" style="color: #D97706; font-weight: 700; font-size: 1.35rem; margin: 0;">₹ 0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Passbook CRM Filter Controls Bar -->
+                <div class="card" style="margin-top: 1rem; padding: 1rem 1.25rem; background: white; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">Type:</span>
+                            <div class="filter-group" id="passbook-type-filters" style="display: flex; gap: 0.4rem;">
+                                <button class="filter-btn active" data-type="all">All</button>
+                                <button class="filter-btn" data-type="sale"><i class="ph ph-arrow-down-left" style="color: #10B981;"></i> Inflow (Sales)</button>
+                                <button class="filter-btn" data-type="purchase"><i class="ph ph-arrow-up-right" style="color: #EF4444;"></i> Outflow (Purchases)</button>
+                                <button class="filter-btn" data-type="payment"><i class="ph ph-coins" style="color: #2563EB;"></i> Khata Recovery</button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <div style="position: relative; min-width: 220px;">
+                                <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                                <input type="text" id="passbook-search-input" placeholder="Search party or voucher..." style="padding: 0.45rem 0.6rem 0.45rem 2rem; font-size: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); width: 100%;">
+                            </div>
+                            <div class="filter-group" id="passbook-date-filters" style="display: flex; gap: 0.4rem;">
+                                <button class="filter-btn active" data-date="all">All Time</button>
+                                <button class="filter-btn" data-date="month">This Month</button>
+                                <button class="filter-btn" data-date="week">This Week</button>
+                                <button class="filter-btn" data-date="today">Today</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -143,10 +196,38 @@
                         <table class="data-table" id="passbook-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Ref / Particulars</th>
-                                    <th style="color: var(--success-color);">Sales (₹)</th>
-                                    <th style="color: var(--danger-color);">Purchases (₹)</th>
+                                    <th data-sort-type="date" data-col="date" class="sortable-th" style="cursor: pointer; width: 110px;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Date</span>
+                                            <span class="sort-badge" title="Sort Date"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="width: 140px;">Voucher / Ref #</th>
+                                    <th data-sort-type="text" data-col="particulars" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Party / Particulars</span>
+                                            <span class="sort-badge" title="Sort Particulars"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="width: 130px; text-align: center;">Type</th>
+                                    <th data-sort-type="number" data-col="debit" class="sortable-th" style="color: var(--danger-color); text-align: right; width: 130px; cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Debit (Out ₹)</span>
+                                            <span class="sort-badge" title="Sort Debit"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="credit" class="sortable-th" style="color: var(--success-color); text-align: right; width: 130px; cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Credit (In ₹)</span>
+                                            <span class="sort-badge" title="Sort Credit"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="balance" class="sortable-th" style="text-align: right; width: 140px; cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Running Balance (₹)</span>
+                                            <span class="sort-badge" title="Sort Balance"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -241,10 +322,7 @@
                                 <input type="number" id="gst-rate-custom" placeholder="%" min="0" max="100" step="0.5" style="display: none; width: 75px; padding: 0.5rem; font-weight: 600;">
                             </div>
                         </div>
-                        <div class="form-group due-date-group" style="display: none;">
-                            <label>Target Due Date</label>
-                            <input type="date" id="due-date">
-                        </div>
+
                     </div>
 
                     <div class="form-row">
@@ -334,6 +412,10 @@
                                 <span>Due Amount:</span>
                                 <h2 id="due-amount" style="margin: 0; color: var(--danger-color);">₹ 0.00</h2>
                             </div>
+                            <div class="due-date-group" style="display: none; flex-direction: column; justify-content: center;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px;">Target Due Date:</span>
+                                <input type="date" id="due-date" style="padding: 0.45rem 0.6rem; font-size: 0.95rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: #fff;">
+                            </div>
                         </div>
                         <div class="action-buttons" style="display: flex; gap: 1rem;">
                             <button class="btn btn-primary" id="download-bill-btn" style="padding: 0.75rem 1.5rem; font-weight: 600; font-size: 1.05rem;">
@@ -373,14 +455,39 @@
                         <table class="data-table" id="sales-history-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Invoice No.</th>
+                                    <th data-sort-type="date" data-col="date" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Date</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="text" data-col="invoice" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Invoice No.</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
                                     <th>Mobile</th>
-                                    <th>Buyer Name</th>
+                                    <th data-sort-type="text" data-col="buyer" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Buyer Name</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
                                     <th>Buyer Address</th>
-                                    <th>Bill Amount</th>
-                                    <th>Due Amount</th>
-                                    <th>Actions</th>
+                                    <th data-sort-type="number" data-col="amount" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Bill Amount</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="due" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Due Amount</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -408,14 +515,39 @@
                         <table class="data-table" id="credit-history-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Buyer Name</th>
+                                    <th data-sort-type="date" data-col="date" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Date</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="text" data-col="buyer" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Buyer Name</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
                                     <th>Mobile</th>
                                     <th>Address</th>
-                                    <th>Due Date</th>
-                                    <th>Original Due</th>
-                                    <th>Current Due</th>
-                                    <th>Actions</th>
+                                    <th data-sort-type="date" data-col="dueDate" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Due Date</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="origDue" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Original Due</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="curDue" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Current Due</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -478,13 +610,28 @@
                         <table class="data-table" id="parties-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
+                                    <th data-sort-type="text" data-col="name" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Name</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
                                     <th>Mobile</th>
                                     <th>GSTN</th>
                                     <th>Address</th>
-                                    <th>Total Trade</th>
-                                    <th>Due Amount</th>
-                                    <th>Actions</th>
+                                    <th data-sort-type="number" data-col="trade" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Total Trade</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="number" data-col="due" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Due Amount</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -582,10 +729,27 @@
                         <table class="data-table" id="purchase-history-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Vendor Name</th>
-                                    <th>Items Count</th>
-                                    <th>Amount</th>
+                                    <th data-sort-type="date" data-col="date" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Date</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th data-sort-type="text" data-col="vendor" class="sortable-th" style="cursor: pointer;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                            <span>Vendor Name</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="min-width: 280px;">Purchased Items (Category - Brand - Variant - Qty @ Price)</th>
+                                    <th data-sort-type="number" data-col="amount" class="sortable-th" style="cursor: pointer; text-align: right;">
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                                            <span>Total Amount</span>
+                                            <span class="sort-badge" title="Toggle Sort"><i class="ph ph-arrows-down-up"></i></span>
+                                        </div>
+                                    </th>
+                                    <th style="text-align: right;">Paid</th>
+                                    <th style="text-align: right;">Due</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -628,7 +792,7 @@
                                     <h2>Sirvi Brothers</h2>
                                     <div style="font-size: 0.85rem; color: #4B5563; margin-bottom: 3px;">Sirvi Brothers, Rajgarh (Dhar) Indore Ahmedabad Road, Madhya Pradesh</div>
                                     GSTN: 23CLKPM6053N1ZO<br>
-                                    Phone: <span id="inv-company-phone">+91 9999999999</span><br>
+                                    Phone: <span id="inv-company-phone">+91 8817990809</span><br>
                                 </td>
                             </tr>
                         </table>

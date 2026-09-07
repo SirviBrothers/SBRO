@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (targetId === 'inventory-tab') renderInventoryTable();
             if (targetId === 'parties-tab') renderPartiesTable();
             if (targetId === 'purchases-tab') renderPurchaseHistoryTable();
+            if (targetId === 'passbook-tab') renderPassbook();
 
             // Auto-collapse sidebar on mobile after clicking a link
             if (window.innerWidth <= 768 && sidebar) {
@@ -920,10 +921,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentPreviewBillData = null;
     const downloadBtn = document.getElementById('download-bill-btn');
     const previewModal = document.getElementById('bill-preview-modal');
-    const closePreviewBtn = document.getElementById('close-bill-preview-modal-btn');
-    const editPreviewBtn = document.getElementById('edit-bill-preview-btn');
     const confirmSaveDownloadBtn = document.getElementById('confirm-save-download-btn');
     const previewContainer = document.getElementById('preview-invoice-container');
+
+    const closePreviewModal = () => {
+        if (previewModal) previewModal.style.display = 'none';
+    };
+
+    ['close-preview-x-btn', 'close-preview-btn', 'close-bill-preview-modal-btn', 'edit-bill-preview-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', closePreviewModal);
+    });
+
+    if (previewModal) {
+        previewModal.addEventListener('click', (e) => {
+            if (e.target === previewModal) closePreviewModal();
+        });
+    }
 
     if (downloadBtn) {
         downloadBtn.addEventListener('click', async () => {
@@ -939,18 +953,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (previewModal) previewModal.style.display = 'flex';
-        });
-    }
-
-    if (closePreviewBtn) {
-        closePreviewBtn.addEventListener('click', () => {
-            if (previewModal) previewModal.style.display = 'none';
-        });
-    }
-
-    if (editPreviewBtn) {
-        editPreviewBtn.addEventListener('click', () => {
-            if (previewModal) previewModal.style.display = 'none';
         });
     }
 
@@ -982,6 +984,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // --- UNIVERSAL TABLE COLUMN SORTING SYSTEM ---
+    const tableSortStates = {
+        sales: { col: 'date', order: 'desc' },
+        purchases: { col: 'date', order: 'desc' },
+        credits: { col: 'date', order: 'desc' },
+        parties: { col: 'name', order: 'asc' },
+        passbook: { col: 'date', order: 'desc' }
+    };
+
+    function updateSortBadges(tableId, state) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        table.querySelectorAll('th.sortable-th').forEach(th => {
+            const col = th.dataset.col;
+            const sortType = th.dataset.sortType || 'text';
+            const badge = th.querySelector('.sort-badge');
+            if (!badge) return;
+
+            if (col === state.col) {
+                th.style.color = 'var(--primary-color)';
+                let label = '';
+                if (sortType === 'date') {
+                    label = state.order === 'desc' ? 'Latest ↓' : 'Oldest ↑';
+                } else if (sortType === 'number') {
+                    label = state.order === 'desc' ? 'High to Low ↓' : 'Low to High ↑';
+                } else {
+                    label = state.order === 'asc' ? 'A to Z ↓' : 'Z to A ↑';
+                }
+                badge.innerHTML = `<span style="background: rgba(37, 99, 235, 0.12); color: var(--primary-color); font-weight: 700; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">${label}</span>`;
+            } else {
+                th.style.color = '';
+                badge.innerHTML = '<i class="ph ph-arrows-down-up" style="color: #9CA3AF;"></i>';
+            }
+        });
+    }
+
+    function setupTableHeaderSorting(tableId, stateKey, reRenderFn) {
+        const table = document.getElementById(tableId);
+        if (!table || table.dataset.sortAttached === 'true') return;
+        table.dataset.sortAttached = 'true';
+
+        table.querySelectorAll('th.sortable-th').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.col;
+                if (!col) return;
+                const state = tableSortStates[stateKey];
+                if (state.col === col) {
+                    state.order = state.order === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.col = col;
+                    state.order = (th.dataset.sortType === 'text') ? 'asc' : 'desc';
+                }
+                updateSortBadges(tableId, state);
+                reRenderFn();
+            });
+        });
+        updateSortBadges(tableId, tableSortStates[stateKey]);
+    }
+
     // Render Sales Table
     async function renderSalesTable() {
         const sales = await StorageManager.getSales();
@@ -991,8 +1052,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         let todayTotal = 0, weekTotal = 0, monthTotal = 0;
         const now = new Date();
 
-        // Sort Newest to Oldest
-        const sortedSales = sales.slice().sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+        // Sort based on active column sort state
+        const sortedSales = sales.slice();
+        const sort = tableSortStates.sales;
+        sortedSales.sort((a, b) => {
+            let valA, valB;
+            if (sort.col === 'date') { valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); }
+            else if (sort.col === 'invoice') { valA = String(a.invoiceNo || ''); valB = String(b.invoiceNo || ''); }
+            else if (sort.col === 'buyer') { valA = (a.buyerName || '').toLowerCase(); valB = (b.buyerName || '').toLowerCase(); }
+            else if (sort.col === 'amount') { valA = parseFloat(a.total || 0); valB = parseFloat(b.total || 0); }
+            else if (sort.col === 'due') { valA = parseFloat(a.dueAmount || a.balance || 0); valB = parseFloat(b.dueAmount || b.balance || 0); }
+            else { valA = a.id; valB = b.id; }
+
+            if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        setupTableHeaderSorting('sales-history-table', 'sales', renderSalesTable);
+        updateSortBadges('sales-history-table', sort);
 
         sortedSales.forEach(sale => {
             const saleDate = new Date(sale.date);
@@ -1142,9 +1220,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Render Credit Table
     async function renderCreditTable() {
-        const credits = await StorageManager.getCredits();
+        const rawCredits = await StorageManager.getCredits();
         const tbody = document.querySelector('#credit-history-table tbody');
         tbody.innerHTML = '';
+
+        const credits = rawCredits.slice();
+        const sort = tableSortStates.credits;
+        credits.sort((a, b) => {
+            let valA, valB;
+            if (sort.col === 'date') { valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); }
+            else if (sort.col === 'buyer') { valA = (a.buyerName || a.party_name || '').toLowerCase(); valB = (b.buyerName || b.party_name || '').toLowerCase(); }
+            else if (sort.col === 'dueDate') { valA = a.dueDate ? new Date(a.dueDate).getTime() : 0; valB = b.dueDate ? new Date(b.dueDate).getTime() : 0; }
+            else if (sort.col === 'origDue') { valA = parseFloat(a.originalDue || a.total || 0); valB = parseFloat(b.originalDue || b.total || 0); }
+            else if (sort.col === 'curDue') { valA = parseFloat(a.dueAmount || a.balance || 0); valB = parseFloat(b.dueAmount || b.balance || 0); }
+            else { valA = a.id; valB = b.id; }
+
+            if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        setupTableHeaderSorting('credit-history-table', 'credits', renderCreditTable);
+        updateSortBadges('credit-history-table', sort);
 
         for (const credit of credits) {
             const remaining = Math.max(0, credit.dueAmount || credit.balance || 0);
@@ -1564,20 +1661,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!tbody) return;
         
         tbody.innerHTML = '';
-        const purchases = (await StorageManager.getPurchases()).slice().reverse(); // Newest first
+        const rawPurchases = await StorageManager.getPurchases();
+        const purchases = (rawPurchases || []).slice();
+
+        const sort = tableSortStates.purchases;
+        purchases.sort((a, b) => {
+            let valA, valB;
+            if (sort.col === 'date') { valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); }
+            else if (sort.col === 'vendor') { valA = (a.vendorName || '').toLowerCase(); valB = (b.vendorName || '').toLowerCase(); }
+            else if (sort.col === 'amount') { valA = parseFloat(a.totalAmount || a.total || 0); valB = parseFloat(b.totalAmount || b.total || 0); }
+            else { valA = a.id; valB = b.id; }
+
+            if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        setupTableHeaderSorting('purchase-history-table', 'purchases', renderPurchaseHistoryTable);
+        updateSortBadges('purchase-history-table', sort);
 
         if (purchases.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No purchases found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 1.5rem;">No purchases found.</td></tr>';
             return;
         }
 
         purchases.forEach(p => {
+            const itemsListHtml = (p.items && p.items.length > 0)
+                ? p.items.map(item => `
+                    <div style="font-size: 0.82rem; margin-bottom: 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span><strong>${item.category || ''}</strong> - ${item.brand || ''} (${item.variant || ''})</span>
+                        <span style="white-space: nowrap; color: var(--primary-color); font-weight: 600;">${item.qty} ${item.unit || 'pcs'} @ ₹${parseFloat(item.price || 0).toFixed(2)}</span>
+                    </div>
+                `).join('')
+                : '<span style="color: var(--text-muted); font-size: 0.8rem;">No items recorded</span>';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${p.date}</td>
-                <td>${p.vendorName}</td>
-                <td>${(p.items || []).length}</td>
-                <td>₹ ${(parseFloat(p.totalAmount || p.total) || 0).toFixed(2)}</td>
+                <td style="white-space: nowrap;">${formatDateDDMMYY(p.date)}</td>
+                <td>
+                    <div style="font-weight: 600;">${p.vendorName || '-'}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">${p.mobile ? '📞 ' + p.mobile : ''}</div>
+                </td>
+                <td style="max-width: 380px;">${itemsListHtml}</td>
+                <td style="font-weight: 700; white-space: nowrap; text-align: right;">₹ ${(parseFloat(p.totalAmount || p.total) || 0).toFixed(2)}</td>
+                <td style="font-weight: 600; color: var(--success-color); white-space: nowrap; text-align: right;">₹ ${(parseFloat(p.paidAmount) || 0).toFixed(2)}</td>
+                <td style="font-weight: 600; color: ${(parseFloat(p.balance) || 0) > 0 ? 'var(--danger-color)' : 'var(--text-muted)'}; white-space: nowrap; text-align: right;">₹ ${(parseFloat(p.balance) || 0).toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -1848,11 +1976,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             return { ...party, totalTrade, dueAmount: clubbedDue };
         });
         
-        if (currentSortByDue) {
-            enrichedParties.sort((a, b) => b.dueAmount - a.dueAmount);
-        } else {
-            enrichedParties.sort((a, b) => b.totalTrade - a.totalTrade);
-        }
+        const sort = tableSortStates.parties;
+        enrichedParties.sort((a, b) => {
+            let valA, valB;
+            if (sort.col === 'name') { valA = (a.name || '').toLowerCase(); valB = (b.name || '').toLowerCase(); }
+            else if (sort.col === 'trade') { valA = parseFloat(a.totalTrade || 0); valB = parseFloat(b.totalTrade || 0); }
+            else if (sort.col === 'due') { valA = parseFloat(a.dueAmount || 0); valB = parseFloat(b.dueAmount || 0); }
+            else { valA = a.id; valB = b.id; }
+
+            if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        setupTableHeaderSorting('parties-table', 'parties', renderPartiesTable);
+        updateSortBadges('parties-table', sort);
         
         enrichedParties.forEach(party => {
             const tr = document.createElement('tr');
@@ -1955,15 +2093,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // --- PASSBOOK & MODALS LOGIC ---
+    // --- CRM PASSBOOK LEDGER LOGIC ---
+    let passbookTypeFilter = 'all';
+    let passbookDateFilter = 'all';
+    let passbookSearchQuery = '';
+
+    function setupPassbookFilterListeners() {
+        const typeContainer = document.getElementById('passbook-type-filters');
+        if (typeContainer && !typeContainer.dataset.attached) {
+            typeContainer.dataset.attached = 'true';
+            typeContainer.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    typeContainer.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    passbookTypeFilter = e.currentTarget.dataset.type || 'all';
+                    renderPassbook();
+                });
+            });
+        }
+
+        const dateContainer = document.getElementById('passbook-date-filters');
+        if (dateContainer && !dateContainer.dataset.attached) {
+            dateContainer.dataset.attached = 'true';
+            dateContainer.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    dateContainer.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    passbookDateFilter = e.currentTarget.dataset.date || 'all';
+                    renderPassbook();
+                });
+            });
+        }
+
+        const searchInput = document.getElementById('passbook-search-input');
+        if (searchInput && !searchInput.dataset.attached) {
+            searchInput.dataset.attached = 'true';
+            searchInput.addEventListener('input', (e) => {
+                passbookSearchQuery = e.target.value.toLowerCase().trim();
+                renderPassbook();
+            });
+        }
+    }
+
     async function renderPassbook() {
+        setupPassbookFilterListeners();
+
         const [sales, purchases, credits] = await Promise.all([
             StorageManager.getSales(),
             StorageManager.getPurchases(),
             StorageManager.getCredits()
         ]);
         const tbody = document.querySelector('#passbook-table tbody');
-        if(!tbody) return;
+        if (!tbody) return;
         tbody.innerHTML = '';
         
         let totalSalesAmount = 0;
@@ -1976,8 +2157,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             ledger.push({
                 timestamp: new Date(sale.date).getTime(),
                 dateStr: sale.date,
-                ref: `Sale: #${sale.invoiceNo} (${sale.buyerName})`,
-                isSale: true,
+                voucherNo: `#${sale.invoiceNo}`,
+                partyName: sale.buyerName || 'Customer',
+                type: 'sale',
+                typeBadge: '<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; font-weight: 600; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-arrow-down-left"></i> Sale (In)</span>',
                 debit: 0,
                 credit: amt
             });
@@ -1989,8 +2172,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             ledger.push({
                 timestamp: new Date(purchase.date).getTime(),
                 dateStr: purchase.date,
-                ref: `Purchase: #${purchase.billNo} (${purchase.vendorName})`,
-                isPurchase: true,
+                voucherNo: purchase.billNo || ('PUR-' + (purchase.id ? String(purchase.id).slice(-4) : '0000')),
+                partyName: purchase.vendorName || 'Vendor',
+                type: 'purchase',
+                typeBadge: '<span class="badge" style="background: rgba(239, 68, 68, 0.12); color: #DC2626; font-weight: 600; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-arrow-up-right"></i> Purchase (Out)</span>',
                 debit: amt,
                 credit: 0
             });
@@ -2000,19 +2185,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         credits.forEach(credit => {
             if (credit.payments) {
                 credit.payments.forEach(p => {
-                    ledger.push({
-                        timestamp: new Date(p.date).getTime(),
-                        dateStr: p.date,
-                        ref: `Khata Payment: #${credit.invoiceNo || credit.billNo} (${credit.buyerName || credit.vendorName})`,
-                        isPayment: true,
-                        debit: 0,
-                        credit: parseFloat(p.amount) || 0
-                    });
+                    const payAmt = parseFloat(p.amount) || 0;
+                    if (payAmt > 0) {
+                        ledger.push({
+                            timestamp: new Date(p.date || credit.date).getTime(),
+                            dateStr: p.date || credit.date,
+                            voucherNo: `PAY-${String(credit.invoiceNo || credit.billNo || '').replace('#', '')}`,
+                            partyName: credit.party_name || credit.buyerName || credit.vendorName || 'Khata Party',
+                            type: 'payment',
+                            typeBadge: '<span class="badge" style="background: rgba(37, 99, 235, 0.12); color: #2563EB; font-weight: 600; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-hand-coins"></i> Due Paid</span>',
+                            debit: 0,
+                            credit: payAmt
+                        });
+                    }
                 });
             }
         });
 
-        // Compute running balance chronologically
+        // Compute running balance chronologically from oldest to newest
         ledger.sort((a, b) => a.timestamp - b.timestamp);
         let runningBalance = 0;
         ledger.forEach(entry => {
@@ -2020,38 +2210,97 @@ document.addEventListener('DOMContentLoaded', async () => {
             entry.balance = runningBalance;
         });
 
-        // Display Newest to Oldest in table
-        ledger.sort((a, b) => b.timestamp - a.timestamp);
+        // Calculate Market Due (Receivables)
+        const pendingDues = credits.filter(c => c.status !== 'Paid');
+        const totalMarketDue = pendingDues.reduce((sum, c) => sum + (parseFloat(c.dueAmount || c.balance || c.current_due) || 0), 0);
 
-        // Display summary cards
+        // Update 4 CRM KPI Cards
         const passbookSalesCard = document.getElementById('passbook-total-sales');
         if (passbookSalesCard) passbookSalesCard.textContent = `₹ ${totalSalesAmount.toFixed(2)}`;
 
         const passbookPurchasesCard = document.getElementById('passbook-total-purchases');
         if (passbookPurchasesCard) passbookPurchasesCard.textContent = `₹ ${totalPurchasesAmount.toFixed(2)}`;
 
+        const passbookNetBalance = document.getElementById('passbook-net-balance');
+        if (passbookNetBalance) {
+            const net = totalSalesAmount - totalPurchasesAmount;
+            passbookNetBalance.textContent = `₹ ${net.toFixed(2)}`;
+            passbookNetBalance.style.color = net >= 0 ? 'var(--primary-color)' : 'var(--danger-color)';
+        }
+
+        const passbookTotalDue = document.getElementById('passbook-total-due');
+        if (passbookTotalDue) passbookTotalDue.textContent = `₹ ${Math.max(0, totalMarketDue).toFixed(2)}`;
+
         const topLiveBalance = document.getElementById('top-live-balance');
         if (topLiveBalance) {
             topLiveBalance.textContent = `₹ ${(totalSalesAmount - totalPurchasesAmount).toFixed(2)}`;
         }
 
-        ledger.forEach(entry => {
-            const tr = document.createElement('tr');
-            let refHtml = entry.ref;
-            if (entry.isSale) {
-                refHtml = `<span style="color: #059669; font-weight: 600;"><i class="ph ph-arrow-down-left"></i> ${entry.ref}</span>`;
-            } else if (entry.isPurchase) {
-                refHtml = `<span style="color: #dc2626; font-weight: 600;"><i class="ph ph-arrow-up-right"></i> ${entry.ref}</span>`;
-            } else if (entry.isPayment) {
-                refHtml = `<span style="color: #2563eb; font-weight: 500;"><i class="ph ph-hand-coins"></i> ${entry.ref}</span>`;
+        // Filter ledger by Type, Date, and Search
+        const now = new Date();
+        let filtered = ledger.filter(entry => {
+            // Type filter
+            if (passbookTypeFilter !== 'all' && entry.type !== passbookTypeFilter) return false;
+
+            // Date filter
+            if (passbookDateFilter !== 'all') {
+                const eDate = new Date(entry.dateStr);
+                if (passbookDateFilter === 'today') {
+                    if (eDate.toDateString() !== now.toDateString()) return false;
+                } else if (passbookDateFilter === 'week') {
+                    const diffDays = Math.ceil(Math.abs(now - eDate) / (1000 * 60 * 60 * 24));
+                    if (diffDays > 7) return false;
+                } else if (passbookDateFilter === 'month') {
+                    if (eDate.getMonth() !== now.getMonth() || eDate.getFullYear() !== now.getFullYear()) return false;
+                }
             }
 
+            // Search filter
+            if (passbookSearchQuery) {
+                const searchStr = `${entry.voucherNo} ${entry.partyName} ${entry.dateStr}`.toLowerCase();
+                if (!searchStr.includes(passbookSearchQuery)) return false;
+            }
+
+            return true;
+        });
+
+        // Sort based on tableSortStates.passbook
+        const sort = tableSortStates.passbook;
+        filtered.sort((a, b) => {
+            let valA, valB;
+            if (sort.col === 'date') { valA = a.timestamp; valB = b.timestamp; }
+            else if (sort.col === 'particulars') { valA = (a.partyName || '').toLowerCase(); valB = (b.partyName || '').toLowerCase(); }
+            else if (sort.col === 'debit') { valA = a.debit; valB = b.debit; }
+            else if (sort.col === 'credit') { valA = a.credit; valB = b.credit; }
+            else if (sort.col === 'balance') { valA = a.balance; valB = b.balance; }
+            else { valA = a.timestamp; valB = b.timestamp; }
+
+            if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        setupTableHeaderSorting('passbook-table', 'passbook', renderPassbook);
+        updateSortBadges('passbook-table', sort);
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No ledger transactions match the selected filters.</td></tr>';
+            return;
+        }
+
+        filtered.forEach(entry => {
+            const tr = document.createElement('tr');
+            tr.style.fontSize = '0.85rem';
+            const balColor = entry.balance >= 0 ? '#059669' : '#DC2626';
+
             tr.innerHTML = `
-                <td style="white-space: nowrap;">${formatDateDDMMYY(entry.dateStr)}</td>
-                <td>${refHtml}</td>
-                <td style="font-weight: 600; color: #dc2626;">${entry.debit > 0 ? '₹ ' + entry.debit.toFixed(2) : '-'}</td>
-                <td style="font-weight: 600; color: #059669;">${entry.credit > 0 ? '₹ ' + entry.credit.toFixed(2) : '-'}</td>
-                <td style="font-weight: 600;">₹ ${(entry.balance || 0).toFixed(2)}</td>
+                <td style="white-space: nowrap; font-weight: 500;">${formatDateDDMMYY(entry.dateStr)}</td>
+                <td style="font-weight: 600; white-space: nowrap;"><span style="background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${entry.voucherNo}</span></td>
+                <td style="font-weight: 500;">${entry.partyName}</td>
+                <td style="text-align: center; white-space: nowrap;">${entry.typeBadge}</td>
+                <td style="font-weight: 600; color: #DC2626; text-align: right; white-space: nowrap;">${entry.debit > 0 ? '₹ ' + entry.debit.toFixed(2) : '-'}</td>
+                <td style="font-weight: 600; color: #059669; text-align: right; white-space: nowrap;">${entry.credit > 0 ? '₹ ' + entry.credit.toFixed(2) : '-'}</td>
+                <td style="font-weight: 700; color: ${balColor}; text-align: right; white-space: nowrap;">₹ ${(entry.balance || 0).toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });

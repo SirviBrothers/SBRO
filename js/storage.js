@@ -133,9 +133,64 @@ class StorageManager {
         if (error) console.error("Error deleting inventory:", error);
     }
 
+    static async increaseStock(category, brand, variant, qty, unit = 'pcs', price = 0) {
+        if (!this.client) return;
+        const cat = (category || '').trim();
+        const brd = (brand || '').trim();
+        const varnt = (variant || '').trim();
+        const addQty = parseFloat(qty) || 0;
+        if (addQty <= 0) return;
+
+        const inventory = await this.getInventory();
+        const matchingItems = inventory.filter(i => 
+            (i.category || '').trim().toLowerCase() === cat.toLowerCase() &&
+            (i.brand || '').trim().toLowerCase() === brd.toLowerCase() &&
+            (i.variant || '').trim().toLowerCase() === varnt.toLowerCase()
+        );
+
+        if (matchingItems.length > 0) {
+            const canonical = matchingItems[0];
+            const currentTotal = matchingItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+            const newQty = currentTotal + addQty;
+            
+            const updatePayload = { quantity: newQty };
+            if (parseFloat(price) > 0) updatePayload.price = parseFloat(price);
+
+            const { error } = await this.client.from('inventory').update(updatePayload).eq('id', canonical.id);
+            if (error) console.error("Error increasing inventory stock:", error);
+
+            // Clean up any duplicate rows if they existed
+            if (matchingItems.length > 1) {
+                for (let j = 1; j < matchingItems.length; j++) {
+                    await this.client.from('inventory').delete().eq('id', matchingItems[j].id);
+                }
+            }
+        } else {
+            // Insert new item
+            const { error } = await this.client.from('inventory').insert([{
+                category: cat,
+                brand: brd,
+                variant: varnt,
+                quantity: addQty,
+                unit: unit || 'pcs',
+                price: parseFloat(price) || 0,
+                min_stock: 0
+            }]);
+            if (error) console.error("Error inserting new inventory item from purchase:", error);
+        }
+    }
+
     static async deductStock(category, brand, variant, qty) {
         const inventory = await this.getInventory();
-        const items = inventory.filter(i => i.category === category && i.brand === brand && i.variant === variant);
+        const cat = (category || '').trim().toLowerCase();
+        const brd = (brand || '').trim().toLowerCase();
+        const varnt = (variant || '').trim().toLowerCase();
+        
+        const items = inventory.filter(i => 
+            (i.category || '').trim().toLowerCase() === cat && 
+            (i.brand || '').trim().toLowerCase() === brd && 
+            (i.variant || '').trim().toLowerCase() === varnt
+        );
         let remainingToDeduct = parseFloat(qty) || 0;
         
         for (const item of items) {
@@ -165,13 +220,7 @@ class StorageManager {
         const sale = sales.find(s => s.invoiceNo === invoiceNo);
         if (sale && sale.items) {
             for (const item of sale.items) {
-                const inventory = await this.getInventory();
-                const invItem = inventory.find(i => i.category === item.category && i.brand === item.brand && i.variant === item.variant);
-                if (invItem) {
-                    await this.client.from('inventory').update({
-                        quantity: parseFloat(invItem.quantity) + (parseFloat(item.qty) || 0)
-                    }).eq('id', invItem.id);
-                }
+                await this.increaseStock(item.category, item.brand, item.variant, item.qty);
             }
         }
     }
@@ -486,35 +535,16 @@ class StorageManager {
             }));
             await this.client.from('purchase_items').insert(itemsToInsert);
 
-            // Automatically increase inventory stock
-            const inventory = await this.getInventory();
+            // Automatically increase inventory stock for every purchase item
             for (let item of purchaseData.items) {
-                const cat = (item.category || '').trim().toLowerCase();
-                const brd = (item.brand || '').trim().toLowerCase();
-                const varnt = (item.variant || '').trim().toLowerCase();
-                const qty = parseFloat(item.qty) || 0;
-                const price = parseFloat(item.price) || 0;
-
-                const existing = inventory.find(i => 
-                    (i.category || '').trim().toLowerCase() === cat && 
-                    (i.brand || '').trim().toLowerCase() === brd && 
-                    (i.variant || '').trim().toLowerCase() === varnt
+                await this.increaseStock(
+                    item.category,
+                    item.brand,
+                    item.variant,
+                    item.qty,
+                    item.unit || 'pcs',
+                    item.price || 0
                 );
-                if (existing) {
-                    await this.client.from('inventory').update({
-                        quantity: (parseFloat(existing.quantity) || 0) + qty
-                    }).eq('id', existing.id);
-                } else {
-                    await this.client.from('inventory').insert([{
-                        category: (item.category || '').trim(),
-                        brand: (item.brand || '').trim(),
-                        variant: (item.variant || '').trim(),
-                        quantity: qty,
-                        unit: item.unit || 'pcs',
-                        price: price,
-                        min_stock: 0
-                    }]);
-                }
             }
         }
 
