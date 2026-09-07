@@ -106,6 +106,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     let editingInvoiceNo = null;
 
+    // Helper to format dates as DD/MM/YY
+    function formatDateDDMMYY(dateStr) {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+    }
+
+    // Restrict mobile inputs to a maximum of 10 digits
+    ['buyer-mobile', 'purchase-vendor-mobile', 'party-mobile-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', (e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val.length > 10) val = val.slice(0, 10);
+                e.target.value = val;
+            });
+        }
+    });
+
     // Sidebar Toggle
     const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
     const sidebar = document.querySelector('.sidebar');
@@ -273,13 +296,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     renderHomeDashboard();
 
-    // Paid Amount and Due Amount Logic
+    // Paid Amount, Due Amount and GST Logic
     const paidAmountInput = document.getElementById('paid-amount');
     const dueDateGroup = document.querySelector('.due-date-group');
     const dueAmountContainer = document.getElementById('due-amount-container');
     const dueAmountDisplay = document.getElementById('due-amount');
     
     let isPaidAmountManuallyEdited = false;
+
+    // GST Bill Controls
+    const isGstCheckbox = document.getElementById('is-gst-bill');
+    const gstRateGroup = document.getElementById('gst-rate-group');
+    const customGstInput = document.getElementById('custom-gst-rate');
+    const selectedGstInput = document.getElementById('selected-gst-rate');
+    const subtotalDisplayGroup = document.getElementById('subtotal-display-group');
+    const taxDisplayGroup = document.getElementById('tax-display-group');
+    const billSubtotalSpan = document.getElementById('bill-subtotal');
+    const billTaxSpan = document.getElementById('bill-tax');
+    const taxLabelSpan = document.getElementById('tax-label');
+
+    if (isGstCheckbox) {
+        isGstCheckbox.addEventListener('change', () => {
+            const isChecked = isGstCheckbox.checked;
+            if (gstRateGroup) gstRateGroup.style.display = isChecked ? 'block' : 'none';
+            if (subtotalDisplayGroup) subtotalDisplayGroup.style.display = isChecked ? 'flex' : 'none';
+            if (taxDisplayGroup) taxDisplayGroup.style.display = isChecked ? 'flex' : 'none';
+            calculateGrandTotal();
+        });
+    }
+
+    document.querySelectorAll('.gst-preset-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.gst-preset-btn').forEach(b => {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-secondary');
+            });
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+            const rate = btn.dataset.rate;
+            if (selectedGstInput) selectedGstInput.value = rate;
+            if (customGstInput) customGstInput.value = '';
+            calculateGrandTotal();
+        });
+    });
+
+    if (customGstInput) {
+        customGstInput.addEventListener('input', (e) => {
+            document.querySelectorAll('.gst-preset-btn').forEach(b => {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-secondary');
+            });
+            const rate = parseFloat(e.target.value) || 0;
+            if (selectedGstInput) selectedGstInput.value = rate;
+            calculateGrandTotal();
+        });
+    }
 
     paidAmountInput.addEventListener('input', async () => {
         isPaidAmountManuallyEdited = true;
@@ -473,78 +545,110 @@ document.addEventListener('DOMContentLoaded', async () => {
     const buyerHistoryList = document.getElementById('buyer-history-list');
     const buyerHistoryDue = document.getElementById('buyer-history-due');
 
-    if (buyerNameInput) {
-        buyerNameInput.addEventListener('input', async (e) => {
-            const typedName = e.target.value.toLowerCase().trim();
-            if (!typedName) {
-                buyerHistoryContainer.style.display = 'none';
-                return;
-            }
+    async function updateBuyerHistory() {
+        const typedName = buyerNameInput ? buyerNameInput.value.toLowerCase().trim() : '';
+        const typedMobile = buyerMobileInput ? buyerMobileInput.value.trim() : '';
+        if (!typedName && !typedMobile) {
+            if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'none';
+            return;
+        }
 
-            const parties = await StorageManager.getParties();
-            const party = parties.find(p => p.name.toLowerCase() === typedName);
+        try {
+            const [allSales, allCredits, parties] = await Promise.all([
+                StorageManager.getSales(),
+                StorageManager.getCredits(),
+                StorageManager.getParties()
+            ]);
+
+            const party = parties.find(p => 
+                (typedName && p.name && p.name.toLowerCase() === typedName) ||
+                (typedMobile && p.mobile && p.mobile === typedMobile)
+            );
 
             if (party) {
-                buyerMobileInput.value = party.mobile || '';
-                buyerGstnInput.value = party.gstn || '';
-                buyerAddressInput.value = party.address || '';
+                if (!buyerMobileInput.value && party.mobile) buyerMobileInput.value = party.mobile;
+                if (!buyerGstnInput.value && party.gstn) buyerGstnInput.value = party.gstn;
+                if (!buyerAddressInput.value && party.address) buyerAddressInput.value = party.address;
+            }
 
-                // Fetch history
-                const sales = await StorageManager.getSales()
-                    .filter(s => s.buyerName.toLowerCase() === typedName)
-                    .sort((a, b) => b.id - a.id) // Newest first
-                    .slice(0, 3); // Last 3 purchases
+            const partySales = allSales.filter(s => 
+                (typedName && s.buyerName && s.buyerName.toLowerCase() === typedName) ||
+                (typedMobile && s.mobile && s.mobile === typedMobile)
+            ).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
-                const credits = (await StorageManager.getCredits()).filter(c => c.buyerName.toLowerCase() === typedName);
-                const totalDue = credits.reduce((sum, c) => {
-                    const paid = c.payments.reduce((pSum, p) => pSum + p.amount, 0);
-                    return sum + (c.dueAmount - paid);
-                }, 0);
+            const partyCredits = allCredits.filter(c => 
+                (typedName && c.buyerName && c.buyerName.toLowerCase() === typedName) ||
+                (typedMobile && c.mobile && c.mobile === typedMobile)
+            );
+            const totalDue = partyCredits.reduce((sum, c) => sum + (c.dueAmount || c.balance || 0), 0);
 
-                if (sales.length > 0) {
-                    buyerHistoryList.innerHTML = sales.map(s => {
+            if (buyerHistoryList) {
+                if (partySales.length > 0) {
+                    buyerHistoryList.innerHTML = partySales.map(s => {
                         const itemsStr = (s.items && s.items.length > 0) 
-                            ? s.items.map(i => `${i.category} - ${i.brand} - ${i.variant} - Qty: ${i.qty} - ₹${i.price}`).join('<br>') 
+                            ? s.items.map(i => `${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.price}`).join('<br>') 
                             : 'No items';
                         const amount = s.totalAmount || s.total || 0;
-                        const credit = credits.find(c => c.invoiceNo === s.invoiceNo);
-                        let dueStr = '';
-                        if (credit) {
-                            const paid = credit.payments ? credit.payments.reduce((pSum, p) => pSum + p.amount, 0) : 0;
-                            const remaining = credit.dueAmount - paid;
-                            if (remaining > 0) {
-                                dueStr = ` <span style="color: var(--danger-color); font-weight: bold;">(Due: ₹ ${remaining.toFixed(2)})</span>`;
-                            }
-                        }
-                        return `<li>${s.date}: Invoice #${s.invoiceNo} - <strong style="color: var(--secondary-color);">₹ ${amount.toFixed(2)}</strong>${dueStr}<br><small style="color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Items:<br>${itemsStr}</small></li>`;
+                        const dueVal = (s.dueAmount || s.balance || 0);
+                        const dueStr = (dueVal > 0) 
+                            ? ` <span style="color: var(--danger-color); font-weight: bold;">(Due: ₹ ${dueVal.toFixed(2)})</span>` 
+                            : ` <span style="color: var(--success-color); font-weight: 500;">(Paid)</span>`;
+                        return `<li style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px dashed #e5e7eb;"><strong>${formatDateDDMMYY(s.date)}</strong>: Invoice #${s.invoiceNo} - <strong style="color: var(--secondary-color);">₹ ${amount.toFixed(2)}</strong>${dueStr}<br><small style="color: var(--text-muted); display: block; margin-top: 0.2rem;">${itemsStr}</small></li>`;
                     }).join('');
                 } else {
-                    buyerHistoryList.innerHTML = '<li>No previous purchases found.</li>';
+                    buyerHistoryList.innerHTML = '<li>No previous purchases or sales found for this buyer.</li>';
                 }
-
-                buyerHistoryDue.textContent = `₹ ${Math.max(0, totalDue).toFixed(2)}`;
-                buyerHistoryContainer.style.display = 'block';
-            } else {
-                buyerHistoryContainer.style.display = 'none';
             }
-        });
+
+            if (buyerHistoryDue) buyerHistoryDue.textContent = `₹ ${Math.max(0, totalDue).toFixed(2)}`;
+            if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'block';
+        } catch (err) {
+            console.error("Error updating buyer history:", err);
+        }
+    }
+
+    if (buyerNameInput) {
+        buyerNameInput.addEventListener('input', updateBuyerHistory);
+        buyerNameInput.addEventListener('blur', updateBuyerHistory);
+    }
+    if (buyerMobileInput) {
+        buyerMobileInput.addEventListener('input', updateBuyerHistory);
+        buyerMobileInput.addEventListener('blur', updateBuyerHistory);
     }
 
     function calculateGrandTotal() {
-        let total = 0;
+        let subtotal = 0;
         document.querySelectorAll('.item-amount-display').forEach(el => {
-            total += parseFloat(el.dataset.value || 0);
+            subtotal += parseFloat(el.dataset.value || 0);
         });
-        document.getElementById('grand-total').textContent = `₹ ${total.toFixed(2)}`;
-        document.getElementById('grand-total').dataset.value = total;
+
+        let grandTotal = subtotal;
+        const isGst = isGstCheckbox && isGstCheckbox.checked;
+
+        if (isGst) {
+            const rate = parseFloat(selectedGstInput ? selectedGstInput.value : 18) || 0;
+            const taxAmt = (subtotal * rate) / 100;
+            grandTotal = subtotal + taxAmt;
+
+            if (billSubtotalSpan) billSubtotalSpan.textContent = `₹ ${subtotal.toFixed(2)}`;
+            if (taxLabelSpan) taxLabelSpan.textContent = `GST (${rate}%):`;
+            if (billTaxSpan) billTaxSpan.textContent = `₹ ${taxAmt.toFixed(2)}`;
+        }
+
+        const grandTotalEl = document.getElementById('grand-total');
+        if (grandTotalEl) {
+            grandTotalEl.textContent = `₹ ${grandTotal.toFixed(2)}`;
+            grandTotalEl.dataset.value = grandTotal;
+            grandTotalEl.dataset.subtotal = subtotal;
+        }
         
-        if (!isPaidAmountManuallyEdited) {
-            paidAmountInput.value = total;
+        if (!isPaidAmountManuallyEdited && paidAmountInput) {
+            paidAmountInput.value = grandTotal.toFixed(2);
         }
         recalculateDueAmount();
     }
 
-    async function processBillData() {
+    async function collectBillData() {
         const date = document.getElementById('bill-date').value;
         const buyerName = document.getElementById('buyer-name').value.trim();
         const mobile = document.getElementById('buyer-mobile').value.trim();
@@ -561,7 +665,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const items = [];
-        let totalAmount = 0;
+        let subtotal = 0;
         let valid = true;
         let stockError = '';
 
@@ -589,7 +693,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 items.push({ category: cat, brand, variant, hsn, price, qty, amount });
-                totalAmount += amount;
+                subtotal += amount;
             }
         }
 
@@ -606,24 +710,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             return null;
         }
 
-        // Deduct Stock
-        if (editingInvoiceNo !== null) {
-            await StorageManager.revertSaleStock(editingInvoiceNo);
-        }
-
-        for (const item of items) {
-            await StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
-        }
+        const isGst = isGstCheckbox && isGstCheckbox.checked;
+        const gstRate = isGst ? (parseFloat(selectedGstInput ? selectedGstInput.value : 18) || 0) : 0;
+        const taxAmount = isGst ? ((subtotal * gstRate) / 100) : 0;
+        const grandTotal = subtotal + taxAmount;
 
         const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNo();
-        const total = totalAmount;
         let paidAmount = parseFloat(paidAmountInput.value);
         if (isNaN(paidAmount)) paidAmount = 0;
-        const dueAmount = total - paidAmount;
+        const dueAmount = Math.max(0, grandTotal - paidAmount);
         const dueDateInput = document.getElementById('due-date');
         const dueDate = (dueDateInput && dueAmount > 0) ? dueDateInput.value : '';
 
-        const billData = {
+        return {
             invoiceNo,
             date,
             buyerName,
@@ -635,13 +734,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             dueAmount,
             dueDate,
             items,
-            total
+            subtotal,
+            isGstBill: isGst,
+            gstRate,
+            taxAmount,
+            total: grandTotal,
+            grandTotal: grandTotal
         };
+    }
 
-// Save Data
-await StorageManager.saveSale(billData, editingInvoiceNo !== null);
+    async function processBillData(preparedBillData = null) {
+        const billData = preparedBillData || await collectBillData();
+        if (!billData) return null;
 
-editingInvoiceNo = null;
+        // Deduct Stock
+        if (editingInvoiceNo !== null) {
+            await StorageManager.revertSaleStock(editingInvoiceNo);
+        }
+
+        for (const item of billData.items) {
+            await StorageManager.deductStock(item.category, item.brand, item.variant, item.qty);
+        }
+
+        // Save Data
+        await StorageManager.saveSale(billData, editingInvoiceNo !== null);
+
+        editingInvoiceNo = null;
         document.querySelector('#billing-tab .page-header h1').textContent = 'New Bill';
         
         return billData;
@@ -652,6 +770,13 @@ editingInvoiceNo = null;
         document.getElementById('buyer-mobile').value = '';
         document.getElementById('buyer-gstn').value = '';
         document.getElementById('buyer-address').value = '';
+        if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'none';
+        if (isGstCheckbox) {
+            isGstCheckbox.checked = false;
+            if (gstRateGroup) gstRateGroup.style.display = 'none';
+            if (subtotalDisplayGroup) subtotalDisplayGroup.style.display = 'none';
+            if (taxDisplayGroup) taxDisplayGroup.style.display = 'none';
+        }
         itemsTbody.innerHTML = '';
         isPaidAmountManuallyEdited = false;
         editingInvoiceNo = null;
@@ -660,67 +785,71 @@ editingInvoiceNo = null;
         calculateGrandTotal();
     }
 
-    // Save Bill Button
-    const saveBtn = document.getElementById('save-bill-btn');
-    saveBtn.addEventListener('click', async () => {
-        const billData = await processBillData();
-        if (billData) {
-            resetForm();
-            alert('Bill saved successfully!');
-        }
-    });
-
-    // Download Bill Button
+    // Bill Preview and Save / Download
+    let currentPreviewBillData = null;
     const downloadBtn = document.getElementById('download-bill-btn');
-    downloadBtn.addEventListener('click', async () => {
-        const billData = await processBillData();
-        if (billData) {
-            downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Downloading...';
-            
-            await PDFGenerator.generate(billData);
-            
-            downloadBtn.disabled = false;
-            downloadBtn.innerHTML = '<i class="ph ph-download-simple"></i> Download';
-            
-            resetForm();
-            alert('Bill downloaded and saved successfully!');
-        }
-    });
+    const previewModal = document.getElementById('bill-preview-modal');
+    const closePreviewBtn = document.getElementById('close-bill-preview-modal-btn');
+    const editPreviewBtn = document.getElementById('edit-bill-preview-btn');
+    const confirmSaveDownloadBtn = document.getElementById('confirm-save-download-btn');
+    const previewContainer = document.getElementById('preview-invoice-container');
 
-    // Share Bill Button
-    const shareBtn = document.getElementById('share-bill-btn');
-    if (shareBtn) shareBtn.addEventListener('click', async () => {
-        const billData = await processBillData();
-        if (billData) {
-            shareBtn.disabled = true;
-            shareBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Preparing...';
-            
-            try {
-                const pdfBlob = await PDFGenerator.generateBlob(billData);
-                const file = new File([pdfBlob], `Invoice_${billData.invoiceNo}.pdf`, { type: 'application/pdf' });
-                
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: `Invoice #${billData.invoiceNo}`,
-                        text: `Please find attached your invoice from Sirvi Brothers.`
-                    });
-                } else {
-                    // Fallback: Download
-                    alert('Sharing not supported on this device. Downloading instead...');
-                    await PDFGenerator.generate(billData);
-                }
-            } catch (error) {
-                console.error("Share failed", error);
-                // User may have just cancelled the share dialog
-            } finally {
-                shareBtn.disabled = false;
-                shareBtn.innerHTML = '<i class="ph ph-share-network"></i> Share';
-                resetForm();
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', async () => {
+            const billData = await collectBillData();
+            if (!billData) return;
+
+            currentPreviewBillData = billData;
+            PDFGenerator._prepareTemplate(billData);
+
+            if (previewContainer) {
+                const templateEl = document.getElementById('invoice-template');
+                previewContainer.innerHTML = templateEl ? templateEl.innerHTML : '';
             }
-        }
-    });
+
+            if (previewModal) previewModal.style.display = 'flex';
+        });
+    }
+
+    if (closePreviewBtn) {
+        closePreviewBtn.addEventListener('click', () => {
+            if (previewModal) previewModal.style.display = 'none';
+        });
+    }
+
+    if (editPreviewBtn) {
+        editPreviewBtn.addEventListener('click', () => {
+            if (previewModal) previewModal.style.display = 'none';
+        });
+    }
+
+    if (confirmSaveDownloadBtn) {
+        confirmSaveDownloadBtn.addEventListener('click', async () => {
+            if (!currentPreviewBillData) return;
+
+            confirmSaveDownloadBtn.disabled = true;
+            confirmSaveDownloadBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Saving & Downloading...';
+
+            try {
+                const savedBill = await processBillData(currentPreviewBillData);
+                if (savedBill) {
+                    await PDFGenerator.generate(savedBill);
+                    if (previewModal) previewModal.style.display = 'none';
+                    resetForm();
+                    alert('Bill saved and downloaded successfully!');
+                    renderSalesTable();
+                    renderHomeDashboard();
+                }
+            } catch (err) {
+                console.error("Save & download error:", err);
+                alert('Error saving or downloading bill: ' + err.message);
+            } finally {
+                confirmSaveDownloadBtn.disabled = false;
+                confirmSaveDownloadBtn.innerHTML = '<i class="ph ph-floppy-disk"></i> Confirm & Save / Download';
+                currentPreviewBillData = null;
+            }
+        });
+    }
 
     // Render Sales Table
     async function renderSalesTable() {
@@ -731,7 +860,10 @@ editingInvoiceNo = null;
         let todayTotal = 0, weekTotal = 0, monthTotal = 0;
         const now = new Date();
 
-        sales.slice().reverse().forEach(sale => {
+        // Sort Newest to Oldest
+        const sortedSales = sales.slice().sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+
+        sortedSales.forEach(sale => {
             const saleDate = new Date(sale.date);
             const diffTime = Math.abs(now - saleDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
@@ -742,56 +874,30 @@ editingInvoiceNo = null;
                 monthTotal += (sale.total || 0);
             }
 
+            const due = parseFloat(sale.dueAmount || sale.balance) || 0;
             const tr = document.createElement('tr');
+            tr.style.fontSize = '0.85rem';
             tr.innerHTML = `
-                <td>${sale.date}</td>
-                <td>#${sale.invoiceNo}</td>
-                <td>${sale.buyerName}</td>
-                <td><span class="badge ${sale.paymentMethod === 'Credit' ? 'warning' : 'success'}">${sale.paymentMethod}</span></td>
-                <td>₹ ${(sale.total || 0).toFixed(2)}</td>
-                <td>
-                    <div style="display: flex; gap: 0.5rem;">
+                <td style="white-space: nowrap;">${formatDateDDMMYY(sale.date)}</td>
+                <td style="font-weight: 600; white-space: nowrap;">#${sale.invoiceNo}</td>
+                <td style="white-space: nowrap;">
+                    <a href="tel:${sale.mobile || ''}" class="btn btn-sm" style="background:#f3f4f6; color:#1f2937; text-decoration:none; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.8rem; padding:0.2rem 0.5rem; border-radius:4px;" title="Call Buyer">
+                        <i class="ph ph-phone"></i> ${sale.mobile || '-'}
+                    </a>
+                </td>
+                <td style="font-weight: 500;">${sale.buyerName}</td>
+                <td style="color: #4B5563; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${sale.address || ''}">${sale.address || '-'}</td>
+                <td style="font-weight: 600; white-space: nowrap;">₹ ${(sale.total || 0).toFixed(2)}</td>
+                <td style="font-weight: 600; white-space: nowrap; color: ${due > 0 ? 'var(--danger-color)' : 'var(--success-color)'};">₹ ${due.toFixed(2)}</td>
+                <td style="white-space: nowrap;">
+                    <div style="display: flex; gap: 0.4rem;">
                         <button class="btn btn-icon edit-sale-btn" data-id="${sale.invoiceNo}" title="Edit"><i class="ph ph-pencil"></i></button>
                         <button class="btn btn-icon download-sale-btn" data-id="${sale.invoiceNo}" title="Download PDF"><i class="ph ph-download-simple"></i></button>
-                        <button class="btn btn-icon share-sale-btn" data-id="${sale.invoiceNo}" title="Share PDF"><i class="ph ph-share-network"></i></button>
                         <button class="btn btn-icon wa-share-btn" data-id="${sale.invoiceNo}" title="Share via WhatsApp" style="color: #25D366; border-color: #25D366;"><i class="ph ph-whatsapp-logo"></i></button>
                     </div>
                 </td>
             `;
             tbody.appendChild(tr);
-        });
-
-        document.querySelectorAll('.share-sale-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const invoiceNo = e.currentTarget.dataset.id;
-                const sale = (await StorageManager.getSales()).find(s => s.invoiceNo === invoiceNo);
-                if (sale) {
-                    const btn = e.currentTarget;
-                    const originalHtml = btn.innerHTML;
-                    btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
-                    btn.disabled = true;
-                    
-                    try {
-                        const pdfBlob = await PDFGenerator.generateBlob(sale);
-                        const file = new File([pdfBlob], `Invoice_${sale.invoiceNo}.pdf`, { type: 'application/pdf' });
-                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                            await navigator.share({
-                                files: [file],
-                                title: `Invoice #${sale.invoiceNo}`,
-                                text: `Invoice from Sirvi Brothers\nThank you for your business!`
-                            });
-                        } else {
-                            alert('Sharing not supported on this device. Downloading instead...');
-                            await PDFGenerator.generate(sale);
-                        }
-                    } catch (error) {
-                        console.error("Share failed", error);
-                    } finally {
-                        btn.innerHTML = originalHtml;
-                        btn.disabled = false;
-                    }
-                }
-            });
         });
 
         document.querySelectorAll('.download-sale-btn').forEach(btn => {
@@ -832,9 +938,10 @@ editingInvoiceNo = null;
                     const sDue = parseFloat(sale.dueAmount || sale.balance) || 0;
 
                     let text = `*Sirvi Brothers - Invoice #${sale.invoiceNo}*\n`;
-                    text += `Date: ${sale.date}\n`;
-                    text += `Customer: ${sale.buyerName}\n\n`;
-                    text += `*Items:*\n${itemsText}\n\n`;
+                    text += `Date: ${formatDateDDMMYY(sale.date)}\n`;
+                    text += `Customer: ${sale.buyerName}\n`;
+                    if (sale.address) text += `Address: ${sale.address}\n`;
+                    text += `\n*Items:*\n${itemsText}\n\n`;
                     text += `*Total Amount:* ₹${sTotal.toFixed(2)}\n`;
                     if (sDue > 0) {
                         text += `*Paid:* ₹${sPaid.toFixed(2)}\n`;
@@ -843,16 +950,13 @@ editingInvoiceNo = null;
                     text += `\nThank you for your business!`;
                     
                     const encodedText = encodeURIComponent(text);
-                    
                     let waUrl = `https://wa.me/`;
                     if (sale.mobile) {
-                        // Ensure 91 prefix if not present (assuming Indian mobile numbers)
                         let mobileStr = sale.mobile.replace(/\D/g, '');
                         if (mobileStr.length === 10) mobileStr = '91' + mobileStr;
                         waUrl += mobileStr;
                     }
                     waUrl += `?text=${encodedText}`;
-                    
                     window.open(waUrl, '_blank');
                 }
             });
@@ -911,9 +1015,9 @@ editingInvoiceNo = null;
         const tbody = document.querySelector('#credit-history-table tbody');
         tbody.innerHTML = '';
 
-        for (const credit of credits.slice().reverse()) {
-            const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
-            const remaining = Math.max(0, (credit.total || 0) - totalPaid);
+        for (const credit of credits) {
+            const remaining = Math.max(0, credit.dueAmount || credit.balance || 0);
+            const original = credit.originalDue || credit.total || 0;
             
             // Auto update status if math shows paid but status doesn't
             if (remaining <= 0 && credit.status !== 'Paid') {
@@ -922,24 +1026,42 @@ editingInvoiceNo = null;
             }
 
             const tr = document.createElement('tr');
+            tr.style.fontSize = '0.85rem';
             tr.innerHTML = `
-                <td>${credit.date || 'N/A'}</td>
-                <td>${credit.buyerName || 'N/A'} <span style="font-size:0.75rem; color:#6B7280;">(${credit.type || 'Sale'})</span></td>
-                <td>${credit.mobile || 'N/A'}</td>
-                <td class="amount-red">₹ ${remaining.toFixed(2)}</td>
-                <td>${credit.dueDate || 'N/A'}</td>
-                <td><span class="badge ${credit.status === 'Paid' ? 'success' : 'warning'}">${credit.status || 'Pending'}</span></td>
-                <td>
-                    ${credit.status !== 'Paid' ? `
-                        <button class="btn btn-success btn-sm mark-paid-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Mark Paid</button>
-                        <button class="btn btn-secondary btn-sm part-pay-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Part Pay</button>
-                        <button class="btn btn-secondary btn-sm edit-date-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Edit Date</button>
-                    ` : ''}
-                    <button class="btn btn-secondary btn-sm view-history-btn" data-id="${credit.id}"><i class="ph ph-clock-counter-clockwise"></i> History</button>
+                <td style="white-space: nowrap; font-size: 0.85rem;">${formatDateDDMMYY(credit.date)}</td>
+                <td style="font-weight: 500; font-size: 0.85rem;">${credit.buyerName || 'N/A'} <span style="font-size:0.75rem; color:#6B7280;">(${credit.type || 'Sale'})</span></td>
+                <td style="white-space: nowrap; font-size: 0.85rem;"><a href="tel:${credit.mobile || ''}" style="color: inherit; text-decoration: none;"><i class="ph ph-phone"></i> ${credit.mobile || '-'}</a></td>
+                <td style="color: #4B5563; font-size: 0.85rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${credit.address || ''}">${credit.address || '-'}</td>
+                <td style="white-space: nowrap; font-size: 0.85rem;">${credit.dueDate ? formatDateDDMMYY(credit.dueDate) : '-'}</td>
+                <td style="font-weight: 600; white-space: nowrap; font-size: 0.85rem;">₹ ${original.toFixed(2)}</td>
+                <td style="font-weight: 600; white-space: nowrap; font-size: 0.85rem; color: ${remaining > 0 ? 'var(--danger-color)' : 'var(--success-color)'};">₹ ${remaining.toFixed(2)}</td>
+                <td style="white-space: nowrap; font-size: 0.85rem;">
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                        <button class="btn btn-secondary btn-sm edit-due-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}" data-balance="${remaining.toFixed(2)}" title="Edit Current Due Amount"><i class="ph ph-pencil"></i> Edit Due</button>
+                        ${remaining > 0 ? `
+                            <button class="btn btn-success btn-sm mark-paid-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Mark Paid</button>
+                            <button class="btn btn-secondary btn-sm part-pay-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Part Pay</button>
+                            <button class="btn btn-secondary btn-sm edit-date-btn" data-id="${credit.id}" data-type="${credit.type || 'Sale'}">Edit Date</button>
+                        ` : ''}
+                        <button class="btn btn-secondary btn-sm view-history-btn" data-id="${credit.id}" title="Payment History"><i class="ph ph-clock-counter-clockwise"></i></button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
         }
+
+        document.querySelectorAll('.edit-due-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                const type = e.currentTarget.dataset.type || 'Sale';
+                const bal = e.currentTarget.dataset.balance || '0';
+
+                document.getElementById('edit-due-credit-id').value = id;
+                document.getElementById('edit-due-credit-type').value = type;
+                document.getElementById('edit-due-amount-input').value = bal;
+                document.getElementById('edit-due-modal').style.display = 'flex';
+            });
+        });
 
         document.querySelectorAll('.mark-paid-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -1289,11 +1411,17 @@ editingInvoiceNo = null;
                 balance
             });
 
+            // Immediately reload inventory and refresh views
+            await StorageManager.getInventory();
             updatePartiesDatalist();
             renderPurchaseHistoryTable();
-            renderInventoryTable(); // Refresh inventory
+            renderInventoryTable();
             
-            alert('Purchase saved successfully!');
+            // Refresh billing form items to include new items in dropdowns
+            itemsTbody.innerHTML = '';
+            createRow();
+            
+            alert('Purchase saved successfully and inventory updated!');
             
             // Reset form
             document.getElementById('purchase-vendor-name').value = '';
@@ -1560,40 +1688,56 @@ editingInvoiceNo = null;
     let currentSortByDue = false;
     
     async function renderPartiesTable() {
-        const parties = await StorageManager.getParties();
-        const sales = await StorageManager.getSales();
-        const credits = await StorageManager.getCredits();
+        const [parties, sales, purchases, credits] = await Promise.all([
+            StorageManager.getParties(),
+            StorageManager.getSales(),
+            StorageManager.getPurchases(),
+            StorageManager.getCredits()
+        ]);
         const tbody = document.querySelector('#parties-table tbody');
         if (!tbody) return;
         
         tbody.innerHTML = '';
         
-        // Calculate totals for each party
+        // Calculate Total Trade (Sales + Purchases) and Clubbed Dues for each party
         const enrichedParties = parties.map(party => {
-            const partySales = sales.filter(s => s.mobile === party.mobile);
-            const totalAmount = partySales.reduce((sum, s) => sum + s.total, 0);
-            
-            const partyCredits = credits.filter(c => c.mobile === party.mobile && c.status !== 'Paid');
-            const dueAmount = partyCredits.reduce((sum, c) => sum + c.total, 0);
-            
-            return { ...party, totalAmount, dueAmount };
+            const pName = (party.name || '').toLowerCase().trim();
+            const pMobile = (party.mobile || '').trim();
+
+            const matchesParty = (item) => {
+                const iName = (item.buyerName || item.vendorName || item.partyName || item.name || '').toLowerCase().trim();
+                const iMobile = (item.mobile || '').trim();
+                return (pMobile && iMobile && pMobile === iMobile) || (pName && iName && pName === iName);
+            };
+
+            const partySales = sales.filter(matchesParty);
+            const partyPurchases = purchases.filter(matchesParty);
+
+            const totalSalesAmt = partySales.reduce((sum, s) => sum + (parseFloat(s.total || s.grandTotal) || 0), 0);
+            const totalPurchasesAmt = partyPurchases.reduce((sum, p) => sum + (parseFloat(p.totalAmount || p.total) || 0), 0);
+            const totalTrade = totalSalesAmt + totalPurchasesAmt;
+
+            // Club all dues regarding customer or vendor
+            const partyCredits = credits.filter(c => matchesParty(c) && c.status !== 'Paid');
+            const clubbedDue = partyCredits.reduce((sum, c) => sum + (parseFloat(c.dueAmount || c.balance) || 0), 0);
+
+            return { ...party, totalTrade, dueAmount: clubbedDue };
         });
         
         if (currentSortByDue) {
             enrichedParties.sort((a, b) => b.dueAmount - a.dueAmount);
         } else {
-            // Default sort by id
-            enrichedParties.sort((a, b) => b.id - a.id);
+            enrichedParties.sort((a, b) => b.totalTrade - a.totalTrade);
         }
         
         enrichedParties.forEach(party => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-weight: 500;">${party.name}</td>
-                <td>${party.mobile}</td>
+                <td><a href="tel:${party.mobile || ''}" style="color: inherit; text-decoration: none;"><i class="ph ph-phone"></i> ${party.mobile || '-'}</a></td>
                 <td>${party.gstn || '-'}</td>
                 <td>${party.address || '-'}</td>
-                <td style="font-weight: bold; color: var(--success-color);">₹ ${party.totalAmount.toFixed(2)}</td>
+                <td style="font-weight: bold; color: var(--success-color);">₹ ${party.totalTrade.toFixed(2)}</td>
                 <td style="font-weight: bold; color: ${party.dueAmount > 0 ? 'var(--danger-color)' : 'var(--text-muted)'};">₹ ${party.dueAmount.toFixed(2)}</td>
                 <td>
                     <button class="btn btn-icon edit-party-btn" data-id="${party.id}" title="Edit Party">
@@ -1688,63 +1832,126 @@ editingInvoiceNo = null;
 
     // --- PASSBOOK & MODALS LOGIC ---
     async function renderPassbook() {
-        const credits = await StorageManager.getCredits();
+        const [sales, purchases, credits] = await Promise.all([
+            StorageManager.getSales(),
+            StorageManager.getPurchases(),
+            StorageManager.getCredits()
+        ]);
         const tbody = document.querySelector('#passbook-table tbody');
         if(!tbody) return;
         tbody.innerHTML = '';
         
+        let totalSalesAmount = 0;
+        let totalPurchasesAmount = 0;
         let ledger = [];
         
-        credits.forEach(credit => {
-            // Debit for the original bill
+        sales.forEach(sale => {
+            const amt = parseFloat(sale.total || sale.grandTotal) || 0;
+            totalSalesAmount += amt;
             ledger.push({
-                date: new Date(credit.date).getTime(),
-                dateStr: credit.date,
-                ref: `Bill #${credit.invoiceNo} (${credit.buyerName})`,
-                type: 'Due Generated',
-                debit: credit.total,
+                timestamp: new Date(sale.date).getTime(),
+                dateStr: sale.date,
+                ref: `Sale: #${sale.invoiceNo} (${sale.buyerName})`,
+                isSale: true,
+                debit: 0,
+                credit: amt
+            });
+        });
+
+        purchases.forEach(purchase => {
+            const amt = parseFloat(purchase.totalAmount || purchase.total) || 0;
+            totalPurchasesAmount += amt;
+            ledger.push({
+                timestamp: new Date(purchase.date).getTime(),
+                dateStr: purchase.date,
+                ref: `Purchase: #${purchase.billNo} (${purchase.vendorName})`,
+                isPurchase: true,
+                debit: amt,
                 credit: 0
             });
-            
-            // Credits for payments
+        });
+
+        // Credit payments
+        credits.forEach(credit => {
             if (credit.payments) {
                 credit.payments.forEach(p => {
                     ledger.push({
-                        date: new Date(p.date).getTime(),
+                        timestamp: new Date(p.date).getTime(),
                         dateStr: p.date,
-                        ref: `Payment for Bill #${credit.invoiceNo}`,
-                        type: 'Payment',
+                        ref: `Khata Payment: #${credit.invoiceNo || credit.billNo} (${credit.buyerName || credit.vendorName})`,
+                        isPayment: true,
                         debit: 0,
-                        credit: p.amount
+                        credit: parseFloat(p.amount) || 0
                     });
                 });
             }
         });
-        
-        ledger.sort((a, b) => a.date - b.date);
-        
-        let totalDueBalance = 0;
-        
+
+        // Compute running balance chronologically
+        ledger.sort((a, b) => a.timestamp - b.timestamp);
+        let runningBalance = 0;
         ledger.forEach(entry => {
-            totalDueBalance += entry.debit;
-            totalDueBalance -= entry.credit;
-            
+            runningBalance += (entry.credit - entry.debit);
+            entry.balance = runningBalance;
+        });
+
+        // Display Newest to Oldest in table
+        ledger.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Display summary cards
+        const passbookSalesCard = document.getElementById('passbook-total-sales');
+        if (passbookSalesCard) passbookSalesCard.textContent = `₹ ${totalSalesAmount.toFixed(2)}`;
+
+        const passbookPurchasesCard = document.getElementById('passbook-total-purchases');
+        if (passbookPurchasesCard) passbookPurchasesCard.textContent = `₹ ${totalPurchasesAmount.toFixed(2)}`;
+
+        const topLiveBalance = document.getElementById('top-live-balance');
+        if (topLiveBalance) {
+            topLiveBalance.textContent = `₹ ${(totalSalesAmount - totalPurchasesAmount).toFixed(2)}`;
+        }
+
+        ledger.forEach(entry => {
             const tr = document.createElement('tr');
+            let refHtml = entry.ref;
+            if (entry.isSale) {
+                refHtml = `<span style="color: #059669; font-weight: 600;"><i class="ph ph-arrow-down-left"></i> ${entry.ref}</span>`;
+            } else if (entry.isPurchase) {
+                refHtml = `<span style="color: #dc2626; font-weight: 600;"><i class="ph ph-arrow-up-right"></i> ${entry.ref}</span>`;
+            } else if (entry.isPayment) {
+                refHtml = `<span style="color: #2563eb; font-weight: 500;"><i class="ph ph-hand-coins"></i> ${entry.ref}</span>`;
+            }
+
             tr.innerHTML = `
-                <td>${entry.dateStr}</td>
-                <td>${entry.ref}</td>
-                <td>${entry.type}</td>
-                <td style="color: var(--danger-color);">${entry.debit > 0 ? '₹ ' + entry.debit.toFixed(2) : '-'}</td>
-                <td style="color: var(--success-color);">${entry.credit > 0 ? '₹ ' + entry.credit.toFixed(2) : '-'}</td>
+                <td style="white-space: nowrap;">${formatDateDDMMYY(entry.dateStr)}</td>
+                <td>${refHtml}</td>
+                <td style="font-weight: 600; color: #dc2626;">${entry.debit > 0 ? '₹ ' + entry.debit.toFixed(2) : '-'}</td>
+                <td style="font-weight: 600; color: #059669;">${entry.credit > 0 ? '₹ ' + entry.credit.toFixed(2) : '-'}</td>
+                <td style="font-weight: 600;">₹ ${(entry.balance || 0).toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });
-        
-        const topLiveBalance = document.getElementById('top-live-balance');
-        if (topLiveBalance) {
-            topLiveBalance.textContent = `₹ ${totalDueBalance.toFixed(2)}`;
-        }
     }
+
+    // Edit Due Modal Actions
+    document.getElementById('cancel-edit-due-btn')?.addEventListener('click', () => {
+        document.getElementById('edit-due-modal').style.display = 'none';
+    });
+
+    document.getElementById('save-edit-due-btn')?.addEventListener('click', async () => {
+        const id = document.getElementById('edit-due-credit-id').value;
+        const type = document.getElementById('edit-due-credit-type').value || 'Sale';
+        const newBal = parseFloat(document.getElementById('edit-due-amount-input').value);
+
+        if (isNaN(newBal) || newBal < 0) {
+            alert('Please enter a valid due amount.');
+            return;
+        }
+
+        await StorageManager.updateCreditBalance(id, newBal, type);
+        document.getElementById('edit-due-modal').style.display = 'none';
+        renderCreditTable();
+        renderHomeDashboard();
+    });
 
     // Payment Modal Actions
     document.getElementById('cancel-payment-btn')?.addEventListener('click', async () => {

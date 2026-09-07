@@ -120,16 +120,32 @@
                     <h1>Passbook Ledger</h1>
                 </div>
                 
+                <div class="stats-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-top: 1rem; margin-bottom: 1rem;">
+                    <div class="stat-card" style="border-left: 4px solid var(--success-color);">
+                        <div class="stat-icon" style="color: var(--success-color); background: rgba(16, 185, 129, 0.1);"><i class="ph ph-arrow-down-left"></i></div>
+                        <div class="stat-details">
+                            <h3>Total Sales</h3>
+                            <p id="passbook-total-sales" style="color: var(--success-color); font-weight: 700; font-size: 1.4rem;">₹ 0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid var(--danger-color);">
+                        <div class="stat-icon" style="color: var(--danger-color); background: rgba(239, 68, 68, 0.1);"><i class="ph ph-arrow-up-right"></i></div>
+                        <div class="stat-details">
+                            <h3>Total Purchases</h3>
+                            <p id="passbook-total-purchases" style="color: var(--danger-color); font-weight: 700; font-size: 1.4rem;">₹ 0.00</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card" style="margin-top: 1rem;">
                     <div class="table-responsive">
                         <table class="data-table" id="passbook-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
-                                    <th>Ref</th>
-                                    <th>Type</th>
-                                    <th style="color: var(--danger-color);">Debit</th>
-                                    <th style="color: var(--success-color);">Credit</th>
+                                    <th>Ref / Particulars</th>
+                                    <th style="color: var(--success-color);">Sales (₹)</th>
+                                    <th style="color: var(--danger-color);">Purchases (₹)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -173,13 +189,6 @@
                             <p id="dash-avg-order">₹ 0.00</p>
                         </div>
                     </div>
-                    <div class="stat-card stat-card-danger">
-                        <div class="stat-icon"><i class="ph ph-warning-circle"></i></div>
-                        <div class="stat-details">
-                            <h3>Total Due Amount</h3>
-                            <p id="dash-total-due">₹ 0.00</p>
-                        </div>
-                    </div>
                     <div class="stat-card" style="background: linear-gradient(135deg, #111827 0%, #374151 100%);">
                         <div class="stat-icon" style="color: #F59E0B; background: rgba(245, 158, 11, 0.1);"><i class="ph ph-star"></i></div>
                         <div class="stat-details">
@@ -209,6 +218,23 @@
                             <label>Date</label>
                             <input type="date" id="bill-date">
                         </div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
+                            <input type="checkbox" id="is-gst-bill" style="width: 20px; height: 20px; cursor: pointer;">
+                            <label for="is-gst-bill" style="margin: 0; cursor: pointer; font-weight: 600;">GST Bill (Optional)</label>
+                        </div>
+                        <div class="form-group" id="gst-rate-group" style="display: none;">
+                            <label>GST Rate</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <select id="gst-rate" style="padding: 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); font-weight: 600;">
+                                    <option value="18">18% (Standard)</option>
+                                    <option value="12">12%</option>
+                                    <option value="5">5%</option>
+                                    <option value="28">28%</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                                <input type="number" id="gst-rate-custom" placeholder="%" min="0" max="100" step="0.5" style="display: none; width: 75px; padding: 0.5rem; font-weight: 600;">
+                            </div>
+                        </div>
                         <div class="form-group due-date-group" style="display: none;">
                             <label>Target Due Date</label>
                             <input type="date" id="due-date">
@@ -221,8 +247,8 @@
                             <input type="text" id="buyer-name" list="parties-list" placeholder="Enter buyer name">
                         </div>
                         <div class="form-group">
-                            <label>Mobile Number (Required)</label>
-                            <input type="tel" id="buyer-mobile" placeholder="Enter mobile number">
+                            <label>Mobile Number (Required - 10 Digits)</label>
+                            <input type="tel" id="buyer-mobile" placeholder="Enter 10-digit mobile" maxlength="10" inputmode="numeric">
                         </div>
                         <div class="form-group">
                             <label>Buyer GSTN</label>
@@ -237,16 +263,18 @@
                         </div>
                     </div>
                     
-                    <div id="buyer-history-container" style="display: none; background: #F9FAFB; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <h4 style="margin: 0; color: var(--text-main); font-size: 0.95rem;">Customer History</h4>
-                            <div style="font-weight: bold; color: var(--danger-color); font-size: 1.1rem;">
-                                Total Due: <span id="buyer-history-due">₹ 0.00</span>
+                    <div id="buyer-history-container" style="display: none; background: #F9FAFB; padding: 1.2rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 0.5rem;">
+                            <h4 style="margin: 0; color: var(--text-main); font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+                                <i class="ph ph-clock-counter-clockwise" style="color: var(--primary-color);"></i> Previous Transaction History
+                            </h4>
+                            <div style="font-weight: bold; color: var(--danger-color); font-size: 1rem;">
+                                Total Outstanding Due: <span id="buyer-history-due">₹ 0.00</span>
                             </div>
                         </div>
-                        <ul id="buyer-history-list" style="margin: 0; padding-left: 1.5rem; color: var(--secondary-color); font-size: 0.85rem;">
+                        <div id="buyer-history-list" style="margin: 0; color: var(--text-main); font-size: 0.88rem; max-height: 200px; overflow-y: auto;">
                             <!-- Populated dynamically -->
-                        </ul>
+                        </div>
                     </div>
 
                     <div class="items-section">
@@ -276,7 +304,15 @@
                     </div>
 
                     <div class="form-footer">
-                        <div class="total-section" style="display: flex; gap: 2rem; align-items: center;">
+                        <div class="total-section" style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                            <div id="subtotal-display-group" style="display: none;">
+                                <span>Subtotal:</span>
+                                <h3 id="subtotal-amount" style="margin: 0; color: var(--text-main); font-size: 1.15rem;">₹ 0.00</h3>
+                            </div>
+                            <div id="tax-display-group" style="display: none;">
+                                <span>GST (<span id="tax-rate-display">18%</span>):</span>
+                                <h3 id="tax-amount" style="margin: 0; color: var(--primary-color); font-size: 1.15rem;">₹ 0.00</h3>
+                            </div>
                             <div>
                                 <span>Total Amount:</span>
                                 <h2 id="grand-total" class="amount-red" style="margin: 0;">₹ 0.00</h2>
@@ -294,14 +330,9 @@
                             </div>
                         </div>
                         <div class="action-buttons" style="display: flex; gap: 1rem;">
-                            <button class="btn btn-secondary" id="save-bill-btn">
-                                <i class="ph ph-floppy-disk"></i> Save
+                            <button class="btn btn-primary" id="download-bill-btn" style="padding: 0.75rem 1.5rem; font-weight: 600; font-size: 1.05rem;">
+                                <i class="ph ph-eye"></i> Preview & Save / Download
                             </button>
-                            <button class="btn btn-primary" id="download-bill-btn">
-                                <i class="ph ph-download-simple"></i> Download/Save
-                            </button>
-                            
-                            
                         </div>
                     </div>
                 </div>
@@ -338,9 +369,11 @@
                                 <tr>
                                     <th>Date</th>
                                     <th>Invoice No.</th>
+                                    <th>Mobile</th>
                                     <th>Buyer Name</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
+                                    <th>Buyer Address</th>
+                                    <th>Bill Amount</th>
+                                    <th>Due Amount</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -369,9 +402,10 @@
                                     <th>Date</th>
                                     <th>Buyer Name</th>
                                     <th>Mobile</th>
-                                    <th>Due Amount</th>
-                                    <th>Target Due Date</th>
-                                    <th>Status</th>
+                                    <th>Address</th>
+                                    <th>Due Date</th>
+                                    <th>Original Due</th>
+                                    <th>Current Due</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -439,7 +473,7 @@
                                     <th>Mobile</th>
                                     <th>GSTN</th>
                                     <th>Address</th>
-                                    <th>Total Amount</th>
+                                    <th>Total Trade</th>
                                     <th>Due Amount</th>
                                     <th>Actions</th>
                                 </tr>
@@ -469,8 +503,8 @@
                             <input type="text" id="purchase-vendor-name" list="parties-list" placeholder="Select or type vendor name">
                         </div>
                         <div class="form-group">
-                            <label>Mobile Number (Optional)</label>
-                            <input type="tel" id="purchase-vendor-mobile" placeholder="Enter mobile number">
+                            <label>Mobile Number (Optional - 10 Digits)</label>
+                            <input type="tel" id="purchase-vendor-mobile" placeholder="Enter 10-digit mobile" maxlength="10" inputmode="numeric">
                         </div>
                         <div class="form-group">
                             <label>GSTN Number (Optional)</label>
@@ -627,8 +661,20 @@
                     <!-- Items populated here -->
                 </tbody>
                 <tfoot>
+                    <tr id="inv-subtotal-row" style="display: none;">
+                        <td colspan="5" style="text-align: right; font-weight: 500;">Subtotal:</td>
+                        <td style="text-align: right; font-weight: 500;" id="inv-subtotal-amount">₹ 0.00</td>
+                    </tr>
+                    <tr id="inv-cgst-row" style="display: none;">
+                        <td colspan="5" style="text-align: right; color: #4B5563;" id="inv-cgst-label">CGST (9%):</td>
+                        <td style="text-align: right; color: #4B5563;" id="inv-cgst-amount">₹ 0.00</td>
+                    </tr>
+                    <tr id="inv-sgst-row" style="display: none;">
+                        <td colspan="5" style="text-align: right; color: #4B5563;" id="inv-sgst-label">SGST (9%):</td>
+                        <td style="text-align: right; color: #4B5563;" id="inv-sgst-amount">₹ 0.00</td>
+                    </tr>
                     <tr class="total-row">
-                        <td colspan="5" style="text-align: right; font-weight: bold;">Total Amount:</td>
+                        <td colspan="5" style="text-align: right; font-weight: bold;" id="inv-total-label">Total Amount:</td>
                         <td style="text-align: right; font-weight: bold; border-top: 2px solid #ddd;" id="inv-total-amount">₹ 0.00</td>
                     </tr>
                     <tr id="inv-paid-row" style="display: none;">
@@ -700,8 +746,8 @@
                 <input type="text" id="party-name-input" placeholder="e.g. Acme Corp">
             </div>
             <div class="form-group" style="margin-top: 1rem;">
-                <label>Mobile Number</label>
-                <input type="tel" id="party-mobile-input" placeholder="e.g. 9999999999">
+                <label>Mobile Number (10 Digits)</label>
+                <input type="tel" id="party-mobile-input" placeholder="e.g. 9829012345" maxlength="10" inputmode="numeric">
             </div>
             <div class="form-group" style="margin-top: 1rem;">
                 <label>GSTN</label>
@@ -756,6 +802,31 @@
         </div>
     </div>
 
+    <!-- Edit Current Due Amount Modal -->
+    <div class="modal-overlay" id="edit-due-modal" style="display: none; z-index: 10004;">
+        <div class="modal-content" style="width: 420px; background: white; border-radius: 12px; padding: 24px;">
+            <h2 style="margin: 0 0 1rem 0; font-size: 1.25rem;">Edit Current Due Amount</h2>
+            <input type="hidden" id="edit-due-credit-id">
+            <input type="hidden" id="edit-due-type">
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Buyer / Party Name</label>
+                <input type="text" id="edit-due-party-name" readonly style="background: #F3F4F6; cursor: not-allowed;">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Original Total / Due (₹)</label>
+                <input type="text" id="edit-due-original-amount" readonly style="background: #F3F4F6; cursor: not-allowed;">
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Current Due Amount (₹)</label>
+                <input type="number" id="edit-due-current-amount" min="0" step="0.01" style="font-weight: bold; font-size: 1.15rem; color: var(--danger-color);">
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.75rem;">
+                <button class="btn btn-secondary" id="cancel-edit-due-btn" style="flex: 1;">Cancel</button>
+                <button class="btn btn-primary" id="save-edit-due-btn" style="flex: 1;">Save Due</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Payment History Modal -->
     <div class="modal-overlay" id="payment-history-modal" style="display: none;">
         <div class="modal-content" style="width: 500px;">
@@ -776,6 +847,29 @@
                         <!-- Populated dynamically -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bill Preview Modal -->
+    <div class="modal-overlay" id="bill-preview-modal" style="display: none; z-index: 10005;">
+        <div class="modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; overflow-y: auto; background: white; border-radius: 12px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+                <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                    <i class="ph ph-file-text" style="color: var(--primary-color);"></i> Invoice Preview
+                </h2>
+                <button class="btn btn-secondary btn-sm" id="close-preview-x-btn" style="padding: 4px 8px; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            <div id="preview-invoice-container" style="background: #FAFAFA; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <!-- Rendered preview placed here -->
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button class="btn btn-secondary" id="close-preview-btn" style="padding: 0.6rem 1.5rem;">
+                    <i class="ph ph-pencil"></i> Edit Details
+                </button>
+                <button class="btn btn-primary" id="confirm-save-download-btn" style="padding: 0.6rem 1.8rem; font-weight: 700; background: #059669; border-color: #059669;">
+                    <i class="ph ph-check-circle"></i> Confirm & Save / Download Bill
+                </button>
             </div>
         </div>
     </div>

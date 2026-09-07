@@ -201,9 +201,18 @@ class StorageManager {
         
         return (data || []).map(s => {
             let dueDate = s.due_date || '';
-            if (!dueDate && s.remarks) {
+            let isGstBill = false;
+            let gstRate = 0;
+
+            if (s.remarks) {
                 const match = s.remarks.match(/DueDate:([^\s]+)/);
                 if (match) dueDate = match[1];
+
+                const gstMatch = s.remarks.match(/GST:([0-9.]+)%/);
+                if (gstMatch) {
+                    isGstBill = true;
+                    gstRate = parseFloat(gstMatch[1]) || 0;
+                }
             }
             if (!dueDate && s.balance > 0 && s.date) {
                 // Default due date to 30 days after sale date
@@ -222,8 +231,8 @@ class StorageManager {
                 date: s.date,
                 buyerName: s.buyer_name,
                 mobile: s.mobile,
-                address: s.address,
-                gstn: s.gstn,
+                address: s.address || '',
+                gstn: s.gstn || '',
                 subtotal: parseFloat(s.subtotal) || grandTotal,
                 discount: parseFloat(s.discount) || 0,
                 grandTotal: grandTotal,
@@ -233,6 +242,8 @@ class StorageManager {
                 dueAmount: balance,
                 balance: balance,
                 dueDate: dueDate,
+                isGstBill: isGstBill,
+                gstRate: gstRate,
                 paymentMethod: s.payment_mode || (balance > 0 ? 'Credit' : 'Cash/Online'),
                 status: balance <= 0 ? 'Paid' : 'Pending',
                 remarks: s.remarks || '',
@@ -263,10 +274,14 @@ class StorageManager {
         const paid = parseFloat(saleData.paidAmount || saleData.receivedAmt) || 0;
         const due = parseFloat(saleData.dueAmount || saleData.balance) || Math.max(0, total - paid);
         
-        let remarks = saleData.remarks || '';
+        let remarks = (saleData.remarks || '').trim();
         if (saleData.dueDate) {
             remarks = remarks.replace(/DueDate:[^\s]+/, '').trim();
             remarks = (remarks ? remarks + ' ' : '') + `DueDate:${saleData.dueDate}`;
+        }
+        if (saleData.isGstBill) {
+            remarks = remarks.replace(/GST:[0-9.]+%/g, '').trim();
+            remarks = (remarks ? remarks + ' ' : '') + `GST:${saleData.gstRate || 0}%`;
         }
 
         const salePayload = {
@@ -317,20 +332,38 @@ class StorageManager {
     }
 
     static async getNextInvoiceNo() {
-        const { data, error } = await this.client.from('sales')
-            .select('invoice_no')
-            .order('created_at', { ascending: false })
-            .limit(1);
-            
-        if (data && data.length > 0) {
-            const lastNo = data[0].invoice_no;
-            const match = lastNo.match(/\d+$/);
-            if (match) {
-                const nextNum = parseInt(match[0], 10) + 1;
-                return `INV-${new Date().getFullYear()}-${String(nextNum).padStart(4, '0')}`;
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const prefix = `SB-${yy}-${mm}-`;
+        
+        if (!this.client) return `${prefix}00001`;
+
+        try {
+            const { data, error } = await this.client.from('sales')
+                .select('invoice_no')
+                .order('created_at', { ascending: false })
+                .limit(50);
+                
+            if (data && data.length > 0) {
+                let maxSeq = 0;
+                for (const row of data) {
+                    if (row.invoice_no && row.invoice_no.startsWith(prefix)) {
+                        const numPart = row.invoice_no.slice(prefix.length);
+                        const num = parseInt(numPart, 10);
+                        if (!isNaN(num) && num > maxSeq) {
+                            maxSeq = num;
+                        }
+                    }
+                }
+                if (maxSeq > 0) {
+                    return `${prefix}${String(maxSeq + 1).padStart(5, '0')}`;
+                }
             }
+        } catch (e) {
+            console.error("Error generating invoice number:", e);
         }
-        return `INV-${new Date().getFullYear()}-0001`;
+        return `${prefix}00001`;
     }
 
     // ==========================================
@@ -439,23 +472,29 @@ class StorageManager {
             // Automatically increase inventory stock
             const inventory = await this.getInventory();
             for (let item of purchaseData.items) {
+                const cat = (item.category || '').trim().toLowerCase();
+                const brd = (item.brand || '').trim().toLowerCase();
+                const varnt = (item.variant || '').trim().toLowerCase();
+                const qty = parseFloat(item.qty) || 0;
+                const price = parseFloat(item.price) || 0;
+
                 const existing = inventory.find(i => 
-                    i.category === item.category && 
-                    i.brand === item.brand && 
-                    i.variant === item.variant
+                    (i.category || '').trim().toLowerCase() === cat && 
+                    (i.brand || '').trim().toLowerCase() === brd && 
+                    (i.variant || '').trim().toLowerCase() === varnt
                 );
                 if (existing) {
                     await this.client.from('inventory').update({
-                        quantity: parseFloat(existing.quantity) + (parseFloat(item.qty) || 0)
+                        quantity: (parseFloat(existing.quantity) || 0) + qty
                     }).eq('id', existing.id);
                 } else {
                     await this.client.from('inventory').insert([{
-                        category: item.category,
-                        brand: item.brand,
-                        variant: item.variant,
-                        quantity: parseFloat(item.qty) || 0,
+                        category: (item.category || '').trim(),
+                        brand: (item.brand || '').trim(),
+                        variant: (item.variant || '').trim(),
+                        quantity: qty,
                         unit: item.unit || 'pcs',
-                        price: parseFloat(item.price) || 0,
+                        price: price,
                         min_stock: 0
                     }]);
                 }
@@ -497,20 +536,30 @@ class StorageManager {
     }
 
     static async getCredits() {
-        const [sales, purchases, allPayments] = await Promise.all([
+        const [sales, purchases, allPayments, parties] = await Promise.all([
             this.getSales(),
             this.getPurchases(),
-            this.getCreditPayments()
+            this.getCreditPayments(),
+            this.getParties()
         ]);
+
+        const partyAddressMap = new Map();
+        parties.forEach(p => {
+            if (p.name && p.address) partyAddressMap.set(p.name.toLowerCase().trim(), p.address);
+            if (p.mobile && p.address) partyAddressMap.set(p.mobile.trim(), p.address);
+        });
 
         const salesCredits = sales.filter(s => s.balance > 0 || (s.paymentMethod === 'Credit')).map(s => {
             const payments = allPayments.filter(p => String(p.creditId) === String(s.id));
-            const totalPaid = s.paidAmount + payments.reduce((sum, p) => sum + p.amount, 0);
+            const totalPaid = (s.paidAmount || 0) + payments.reduce((sum, p) => sum + p.amount, 0);
             const remaining = Math.max(0, s.total - totalPaid);
+            const addr = s.address || partyAddressMap.get((s.buyerName || '').toLowerCase().trim()) || partyAddressMap.get((s.mobile || '').trim()) || '';
             return {
                 ...s,
                 type: 'Sale',
+                address: addr,
                 payments: payments,
+                originalDue: s.total,
                 balance: remaining,
                 dueAmount: remaining,
                 status: remaining <= 0 ? 'Paid' : 'Pending'
@@ -519,13 +568,16 @@ class StorageManager {
         
         const purchaseCredits = purchases.filter(p => p.balance > 0).map(p => {
             const payments = allPayments.filter(pay => String(pay.creditId) === String(p.id));
-            const totalPaid = p.paidAmount + payments.reduce((sum, pay) => sum + pay.amount, 0);
+            const totalPaid = (p.paidAmount || 0) + payments.reduce((sum, pay) => sum + pay.amount, 0);
             const remaining = Math.max(0, p.total - totalPaid);
+            const addr = p.address || partyAddressMap.get((p.vendorName || '').toLowerCase().trim()) || partyAddressMap.get((p.mobile || '').trim()) || '';
             return {
                 ...p,
                 buyerName: p.vendorName,
+                address: addr,
                 type: 'Purchase',
                 payments: payments,
+                originalDue: p.total,
                 balance: remaining,
                 dueAmount: remaining,
                 status: remaining <= 0 ? 'Paid' : 'Pending'
@@ -687,6 +739,34 @@ class StorageManager {
                     } catch (e) {}
                 }
             }
+        }
+    }
+
+    static async updateCreditBalance(creditId, newBalance, type = 'Sale') {
+        const bal = Math.max(0, parseFloat(newBalance) || 0);
+        const isSale = type === 'Sale';
+        const table = isSale ? 'sales' : 'purchases';
+        
+        if (!this.client) return;
+        try {
+            const { data, error } = await this.client.from(table).select('*').eq('id', creditId).single();
+            if (data) {
+                const total = parseFloat(isSale ? data.grand_total : data.total_amount) || 0;
+                const updatedReceived = Math.max(0, total - bal);
+                if (isSale) {
+                    await this.client.from('sales').update({
+                        balance: bal,
+                        received_amt: updatedReceived
+                    }).eq('id', creditId);
+                } else {
+                    await this.client.from('purchases').update({
+                        balance: bal,
+                        paid_amount: updatedReceived
+                    }).eq('id', creditId);
+                }
+            }
+        } catch (e) {
+            console.error("Error updating credit balance:", e);
         }
     }
 

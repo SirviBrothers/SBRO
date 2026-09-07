@@ -47,6 +47,38 @@ class PDFGenerator {
         const totalAmt = parseFloat(billData.total || billData.grandTotal) || 0;
         const paidAmt = parseFloat(billData.paidAmount || billData.receivedAmt) || 0;
         const dueAmt = parseFloat(billData.dueAmount || billData.balance) || Math.max(0, totalAmt - paidAmt);
+        const isGst = !!billData.isGstBill;
+        const subtotal = parseFloat(billData.subtotal) || (totalAmt / (1 + ((billData.gstRate || 0) / 100)));
+        const gstRate = parseFloat(billData.gstRate) || 0;
+
+        const subtotalRow = document.getElementById('inv-subtotal-row');
+        const cgstRow = document.getElementById('inv-cgst-row');
+        const sgstRow = document.getElementById('inv-sgst-row');
+        const totalLabel = document.getElementById('inv-total-label');
+
+        if (isGst && subtotalRow && cgstRow && sgstRow) {
+            const halfRate = gstRate / 2;
+            const totalTax = Math.max(0, totalAmt - subtotal);
+            const halfTax = totalTax / 2;
+
+            subtotalRow.style.display = 'table-row';
+            document.getElementById('inv-subtotal-amount').innerText = `₹ ${subtotal.toFixed(2)}`;
+
+            cgstRow.style.display = 'table-row';
+            document.getElementById('inv-cgst-label').innerText = `CGST (${halfRate.toFixed(1)}%):`;
+            document.getElementById('inv-cgst-amount').innerText = `₹ ${halfTax.toFixed(2)}`;
+
+            sgstRow.style.display = 'table-row';
+            document.getElementById('inv-sgst-label').innerText = `SGST (${halfRate.toFixed(1)}%):`;
+            document.getElementById('inv-sgst-amount').innerText = `₹ ${halfTax.toFixed(2)}`;
+
+            if (totalLabel) totalLabel.innerText = 'Grand Total:';
+        } else {
+            if (subtotalRow) subtotalRow.style.display = 'none';
+            if (cgstRow) cgstRow.style.display = 'none';
+            if (sgstRow) sgstRow.style.display = 'none';
+            if (totalLabel) totalLabel.innerText = 'Total Amount:';
+        }
 
         document.getElementById('inv-total-amount').innerText = `₹ ${totalAmt.toFixed(2)}`;
         
