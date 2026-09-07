@@ -329,6 +329,23 @@ class StorageManager {
         }
 
         await this.autoRegisterParty(saleData.buyerName, saleData.mobile, saleData.address, saleData.gstn);
+
+        // Sync with Supabase dedicated 'credits' table if credit/due applies
+        if (due > 0 || salePayload.payment_mode === 'Credit') {
+            await this.syncCreditRecord({
+                referenceNo: saleData.invoiceNo,
+                saleId: saleId,
+                type: 'Sale',
+                partyName: saleData.buyerName,
+                mobile: saleData.mobile,
+                address: saleData.address,
+                date: saleData.date,
+                dueDate: saleData.dueDate,
+                originalDue: total,
+                currentDue: due,
+                remarks: remarks
+            });
+        }
     }
 
     static async getNextInvoiceNo() {
@@ -502,11 +519,131 @@ class StorageManager {
         }
 
         await this.autoRegisterParty(purchaseData.vendorName, purchaseData.mobile, '', purchaseData.gstn);
+
+        // Sync with Supabase dedicated 'credits' table if credit/due applies
+        if (balance > 0) {
+            await this.syncCreditRecord({
+                referenceNo: billNo,
+                purchaseId: purchaseId,
+                type: 'Purchase',
+                partyName: purchaseData.vendorName,
+                mobile: purchaseData.mobile || '',
+                address: '',
+                date: purchaseData.date,
+                dueDate: purchaseData.dueDate || null,
+                originalDue: total,
+                currentDue: balance,
+                remarks: purchaseData.remarks || ''
+            });
+        }
     }
 
     // ==========================================
-    // CREDITS & PAYMENTS (KHATA)
+    // CREDITS & PAYMENTS (KHATA) - SUPABASE 'credits' TABLE
     // ==========================================
+    static isUUID(str) {
+        return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    }
+
+    static async syncCreditRecord({ referenceNo, saleId = null, purchaseId = null, type = 'Sale', partyName, mobile = '', address = '', date, dueDate = null, originalDue, currentDue, remarks = '' }) {
+        if (!this.client || !referenceNo) return;
+        try {
+            const original = Math.max(0, parseFloat(originalDue) || 0);
+            const current = Math.max(0, parseFloat(currentDue) || 0);
+            const status = current <= 0 ? 'Paid' : (current < original ? 'Partial' : 'Pending');
+            
+            const payload = {
+                reference_no: referenceNo,
+                type: type,
+                party_name: partyName || 'N/A',
+                mobile: mobile || '',
+                address: address || '',
+                date: date || new Date().toISOString().split('T')[0],
+                due_date: dueDate || null,
+                original_due: original,
+                current_due: current,
+                status: status,
+                remarks: remarks || '',
+                updated_at: new Date().toISOString()
+            };
+            if (saleId && this.isUUID(saleId)) payload.sale_id = saleId;
+            if (purchaseId && this.isUUID(purchaseId)) payload.purchase_id = purchaseId;
+
+            // Check if record exists in credits table
+            const { data: existing, error } = await this.client
+                .from('credits')
+                .select('id, original_due')
+                .eq('reference_no', referenceNo)
+                .maybeSingle();
+
+            if (error) {
+                // Table might not exist yet before SQL migration is executed
+                return;
+            }
+
+            if (existing) {
+                await this.client.from('credits').update(payload).eq('reference_no', referenceNo);
+            } else {
+                await this.client.from('credits').insert([payload]);
+            }
+        } catch (e) {
+            console.warn("syncCreditRecord notice (credits table may need creation):", e);
+        }
+    }
+
+    static async syncCreditsToDatabase() {
+        if (!this.client) return;
+        try {
+            const [sales, purchases] = await Promise.all([
+                this.getSales(),
+                this.getPurchases()
+            ]);
+
+            const promises = [];
+
+            for (const s of sales) {
+                if (s.balance > 0 || s.paymentMethod === 'Credit') {
+                    promises.push(this.syncCreditRecord({
+                        referenceNo: s.invoiceNo,
+                        saleId: s.id,
+                        type: 'Sale',
+                        partyName: s.buyerName,
+                        mobile: s.mobile,
+                        address: s.address,
+                        date: s.date,
+                        dueDate: s.dueDate,
+                        originalDue: s.total,
+                        currentDue: s.balance,
+                        remarks: s.remarks
+                    }));
+                }
+            }
+
+            for (const p of purchases) {
+                if (p.balance > 0) {
+                    promises.push(this.syncCreditRecord({
+                        referenceNo: p.billNo,
+                        purchaseId: p.id,
+                        type: 'Purchase',
+                        partyName: p.vendorName,
+                        mobile: p.mobile,
+                        address: p.address || '',
+                        date: p.date,
+                        dueDate: p.dueDate,
+                        originalDue: p.total,
+                        currentDue: p.balance,
+                        remarks: p.remarks
+                    }));
+                }
+            }
+
+            await Promise.all(promises);
+            console.log(`Synced ${promises.length} credit records to Supabase 'credits' table.`);
+        } catch (e) {
+            console.warn("syncCreditsToDatabase warning:", e);
+        }
+    }
+
     static async getCreditPayments(creditId = null) {
         try {
             let query = this.client.from('credit_payments').select('*').order('payment_date', { ascending: true });
@@ -536,9 +673,7 @@ class StorageManager {
     }
 
     static async getCredits() {
-        const [sales, purchases, allPayments, parties] = await Promise.all([
-            this.getSales(),
-            this.getPurchases(),
+        const [allPayments, parties] = await Promise.all([
             this.getCreditPayments(),
             this.getParties()
         ]);
@@ -548,6 +683,63 @@ class StorageManager {
             if (p.name && p.address) partyAddressMap.set(p.name.toLowerCase().trim(), p.address);
             if (p.mobile && p.address) partyAddressMap.set(p.mobile.trim(), p.address);
         });
+
+        // 1. Try querying the dedicated Supabase 'credits' table first
+        try {
+            const { data: dbCredits, error } = await this.client
+                .from('credits')
+                .select('*')
+                .order('date', { ascending: false });
+
+            if (!error && Array.isArray(dbCredits) && dbCredits.length > 0) {
+                return dbCredits.map(c => {
+                    const payments = allPayments.filter(p => 
+                        (c.id && String(p.creditId) === String(c.id)) ||
+                        (c.sale_id && String(p.creditId) === String(c.sale_id)) ||
+                        (c.purchase_id && String(p.creditId) === String(c.purchase_id)) ||
+                        (c.reference_no && String(p.referenceNo) === String(c.reference_no))
+                    );
+                    const originalDue = parseFloat(c.original_due) || 0;
+                    const currentDue = parseFloat(c.current_due) || 0;
+                    const addr = c.address || partyAddressMap.get((c.party_name || '').toLowerCase().trim()) || partyAddressMap.get((c.mobile || '').trim()) || '';
+                    
+                    return {
+                        id: c.sale_id || c.purchase_id || c.id,
+                        creditDbId: c.id,
+                        saleId: c.sale_id,
+                        purchaseId: c.purchase_id,
+                        referenceNo: c.reference_no,
+                        invoiceNo: c.type === 'Sale' ? c.reference_no : undefined,
+                        billNo: c.type === 'Purchase' ? c.reference_no : undefined,
+                        type: c.type || 'Sale',
+                        buyerName: c.party_name,
+                        vendorName: c.party_name,
+                        partyName: c.party_name,
+                        mobile: c.mobile || '',
+                        address: addr,
+                        date: c.date,
+                        dueDate: c.due_date || '',
+                        originalDue: originalDue,
+                        total: originalDue,
+                        grandTotal: originalDue,
+                        totalAmount: originalDue,
+                        balance: currentDue,
+                        dueAmount: currentDue,
+                        status: c.status || (currentDue <= 0 ? 'Paid' : 'Pending'),
+                        remarks: c.remarks || '',
+                        payments: payments
+                    };
+                });
+            }
+        } catch (err) {
+            console.warn("Could not fetch from 'credits' table, using dynamic fallback:", err);
+        }
+
+        // 2. Dynamic fallback from sales & purchases
+        const [sales, purchases] = await Promise.all([
+            this.getSales(),
+            this.getPurchases()
+        ]);
 
         const salesCredits = sales.filter(s => s.balance > 0 || (s.paymentMethod === 'Credit')).map(s => {
             const payments = allPayments.filter(p => String(p.creditId) === String(s.id));
@@ -587,49 +779,87 @@ class StorageManager {
         return [...salesCredits, ...purchaseCredits].sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
-    static async addPaymentToCredit(creditId, amount, date, paymentMode = 'Cash', remarks = '') {
+    static async addPaymentToCredit(creditId, amount, date, paymentMode = 'Cash', remarks = '', type = null) {
         const numAmount = parseFloat(amount) || 0;
         if (numAmount <= 0) return;
 
-        // 1. Locate credit in sales or purchases
-        let isSale = true;
-        let { data: creditRow, error } = await this.client.from('sales').select('*').eq('id', creditId).single();
-        if (!creditRow || error) {
-            isSale = false;
-            const res = await this.client.from('purchases').select('*').eq('id', creditId).single();
-            creditRow = res.data;
+        let isSale = type ? (type === 'Sale') : true;
+        let creditRow = null;
+        let refNo = '';
+        let party = '';
+
+        // 1. Check if creditId exists in credits table
+        try {
+            let query = this.client.from('credits').select('*');
+            if (this.isUUID(creditId)) {
+                query = query.or(`id.eq.${creditId},sale_id.eq.${creditId},purchase_id.eq.${creditId}`);
+            } else {
+                query = query.eq('reference_no', creditId);
+            }
+            const { data: directCredit } = await query.maybeSingle();
+
+            if (directCredit) {
+                isSale = directCredit.type === 'Sale';
+                refNo = directCredit.reference_no;
+                party = directCredit.party_name;
+                const newDue = Math.max(0, (parseFloat(directCredit.current_due) || 0) - numAmount);
+                const newStatus = newDue <= 0 ? 'Paid' : 'Partial';
+                await this.client.from('credits').update({
+                    current_due: newDue,
+                    status: newStatus,
+                    updated_at: new Date().toISOString()
+                }).eq('id', directCredit.id);
+            }
+        } catch (e) {
+            console.warn("Notice: updating credits table payment:", e);
         }
 
-        if (!creditRow) {
-            console.error("Credit not found for id:", creditId);
-            return;
-        }
+        // 2. Update sales or purchases table to keep both in sync
+        try {
+            let { data: saleRow } = await this.client.from('sales').select('*').eq('id', creditId).maybeSingle();
+            if (saleRow) {
+                isSale = true;
+                creditRow = saleRow;
+                refNo = creditRow.invoice_no;
+                party = creditRow.buyer_name;
+            } else {
+                const { data: purRow } = await this.client.from('purchases').select('*').eq('id', creditId).maybeSingle();
+                if (purRow) {
+                    isSale = false;
+                    creditRow = purRow;
+                    refNo = creditRow.bill_no;
+                    party = creditRow.vendor_name;
+                }
+            }
 
-        const table = isSale ? 'sales' : 'purchases';
-        const currentBalance = parseFloat(creditRow.balance) || 0;
-        const currentReceived = parseFloat(isSale ? creditRow.received_amt : creditRow.paid_amount) || 0;
-        const newBalance = Math.max(0, currentBalance - numAmount);
-        const newReceived = currentReceived + numAmount;
+            if (creditRow) {
+                const currentBalance = parseFloat(creditRow.balance) || 0;
+                const currentReceived = parseFloat(isSale ? creditRow.received_amt : creditRow.paid_amount) || 0;
+                const newBalance = Math.max(0, currentBalance - numAmount);
+                const newReceived = currentReceived + numAmount;
 
-        // 2. Update table balance
-        if (isSale) {
-            await this.client.from('sales').update({
-                balance: newBalance,
-                received_amt: newReceived
-            }).eq('id', creditId);
-        } else {
-            await this.client.from('purchases').update({
-                balance: newBalance,
-                paid_amount: newReceived
-            }).eq('id', creditId);
+                if (isSale) {
+                    await this.client.from('sales').update({
+                        balance: newBalance,
+                        received_amt: newReceived
+                    }).eq('id', creditId);
+                } else {
+                    await this.client.from('purchases').update({
+                        balance: newBalance,
+                        paid_amount: newReceived
+                    }).eq('id', creditId);
+                }
+            }
+        } catch (e) {
+            console.warn("Notice: updating sales/purchases on payment:", e);
         }
 
         // 3. Log to credit_payments
         try {
             await this.client.from('credit_payments').insert([{
                 credit_id: creditId,
-                reference_no: isSale ? creditRow.invoice_no : creditRow.bill_no,
-                party_name: isSale ? creditRow.buyer_name : creditRow.vendor_name,
+                reference_no: refNo,
+                party_name: party,
                 party_type: isSale ? 'Customer' : 'Vendor',
                 amount: numAmount,
                 payment_date: date || new Date().toISOString().split('T')[0],
@@ -655,13 +885,13 @@ class StorageManager {
 
         const amount = paymentToRemove.amount;
 
-        // Revert balance on sale/purchase
+        // Revert balance on sales/purchases
         let isSale = true;
-        let { data: creditRow } = await this.client.from('sales').select('*').eq('id', creditId).single();
+        let { data: creditRow } = await this.client.from('sales').select('*').eq('id', creditId).maybeSingle();
         if (!creditRow) {
             isSale = false;
-            const res = await this.client.from('purchases').select('*').eq('id', creditId).single();
-            creditRow = res.data;
+            const res = await this.client.from('purchases').select('*').eq('id', creditId).maybeSingle();
+            creditRow = res ? res.data : null;
         }
 
         if (creditRow) {
@@ -677,6 +907,28 @@ class StorageManager {
             }
         }
 
+        // Revert in credits table
+        try {
+            let query = this.client.from('credits').select('*');
+            if (this.isUUID(creditId)) {
+                query = query.or(`id.eq.${creditId},sale_id.eq.${creditId},purchase_id.eq.${creditId}`);
+            } else if (paymentToRemove.referenceNo) {
+                query = query.eq('reference_no', paymentToRemove.referenceNo);
+            }
+            const { data: directCredit } = await query.maybeSingle();
+            if (directCredit) {
+                const newDue = (parseFloat(directCredit.current_due) || 0) + amount;
+                const newStatus = newDue <= 0 ? 'Paid' : 'Pending';
+                await this.client.from('credits').update({
+                    current_due: newDue,
+                    status: newStatus,
+                    updated_at: new Date().toISOString()
+                }).eq('id', directCredit.id);
+            }
+        } catch (e) {
+            console.warn("Notice: could not revert in credits table:", e);
+        }
+
         // Delete payment row
         try {
             await this.client.from('credit_payments').delete().eq('id', paymentToRemove.id);
@@ -687,58 +939,92 @@ class StorageManager {
 
     static async updateCreditDueDate(id, newDate, type = 'Sale') {
         const table = type === 'Sale' ? 'sales' : 'purchases';
-        const { data } = await this.client.from(table).select('remarks').eq('id', id).single();
-        if (data) {
-            let remarks = data.remarks || '';
-            remarks = remarks.replace(/DueDate:[^\s]+/, '').trim();
-            remarks = (remarks ? remarks + ' ' : '') + `DueDate:${newDate}`;
-            await this.client.from(table).update({ remarks: remarks.trim() }).eq('id', id);
+        let refNo = null;
+
+        try {
+            const { data } = await this.client.from(table).select('remarks, invoice_no, bill_no').eq('id', id).maybeSingle();
+            if (data) {
+                refNo = type === 'Sale' ? data.invoice_no : data.bill_no;
+                let remarks = data.remarks || '';
+                remarks = remarks.replace(/DueDate:[^\s]+/, '').trim();
+                remarks = (remarks ? remarks + ' ' : '') + `DueDate:${newDate}`;
+                await this.client.from(table).update({ remarks: remarks.trim(), due_date: newDate }).eq('id', id);
+            }
+        } catch (e) {
+            console.warn("Notice: updating source table due date:", e);
+        }
+
+        // Also update dedicated Supabase 'credits' table
+        try {
+            const updatePayload = {
+                due_date: newDate,
+                updated_at: new Date().toISOString()
+            };
+            if (this.isUUID(id)) {
+                await this.client.from('credits').update(updatePayload).or(`id.eq.${id},sale_id.eq.${id},purchase_id.eq.${id}`);
+            } else if (refNo) {
+                await this.client.from('credits').update(updatePayload).eq('reference_no', refNo);
+            }
+        } catch (e) {
+            console.warn("Notice: updating credits table due date:", e);
         }
     }
     
     static async markCreditAsPaid(id, date, type = 'Sale') {
+        let refNo = '';
+        let party = '';
+        let remaining = 0;
+
         if (type === 'Sale') {
-            const { data } = await this.client.from('sales').select('grand_total, buyer_name, invoice_no, balance').eq('id', id).single();
+            const { data } = await this.client.from('sales').select('grand_total, buyer_name, invoice_no, balance').eq('id', id).maybeSingle();
             if (data) {
                 const total = parseFloat(data.grand_total) || 0;
-                const remaining = parseFloat(data.balance) || total;
+                remaining = parseFloat(data.balance) || total;
+                refNo = data.invoice_no;
+                party = data.buyer_name;
                 await this.client.from('sales').update({ balance: 0, received_amt: total }).eq('id', id);
-                if (remaining > 0) {
-                    try {
-                        await this.client.from('credit_payments').insert([{
-                            credit_id: id,
-                            reference_no: data.invoice_no,
-                            party_name: data.buyer_name,
-                            party_type: 'Customer',
-                            amount: remaining,
-                            payment_date: date || new Date().toISOString().split('T')[0],
-                            payment_mode: 'Cash',
-                            remarks: 'Full Settlement'
-                        }]);
-                    } catch (e) {}
-                }
             }
         } else {
-            const { data } = await this.client.from('purchases').select('total_amount, vendor_name, bill_no, balance').eq('id', id).single();
+            const { data } = await this.client.from('purchases').select('total_amount, vendor_name, bill_no, balance').eq('id', id).maybeSingle();
             if (data) {
                 const total = parseFloat(data.total_amount) || 0;
-                const remaining = parseFloat(data.balance) || total;
+                remaining = parseFloat(data.balance) || total;
+                refNo = data.bill_no;
+                party = data.vendor_name;
                 await this.client.from('purchases').update({ balance: 0, paid_amount: total }).eq('id', id);
-                if (remaining > 0) {
-                    try {
-                        await this.client.from('credit_payments').insert([{
-                            credit_id: id,
-                            reference_no: data.bill_no,
-                            party_name: data.vendor_name,
-                            party_type: 'Vendor',
-                            amount: remaining,
-                            payment_date: date || new Date().toISOString().split('T')[0],
-                            payment_mode: 'Cash',
-                            remarks: 'Full Settlement'
-                        }]);
-                    } catch (e) {}
-                }
             }
+        }
+
+        // Also update dedicated Supabase 'credits' table
+        try {
+            const updatePayload = {
+                current_due: 0,
+                status: 'Paid',
+                updated_at: new Date().toISOString()
+            };
+            if (this.isUUID(id)) {
+                await this.client.from('credits').update(updatePayload).or(`id.eq.${id},sale_id.eq.${id},purchase_id.eq.${id}`);
+            } else if (refNo) {
+                await this.client.from('credits').update(updatePayload).eq('reference_no', refNo);
+            }
+        } catch (e) {
+            console.warn("Notice: could not mark paid in 'credits' table:", e);
+        }
+
+        // Insert settlement payment row
+        if (remaining > 0) {
+            try {
+                await this.client.from('credit_payments').insert([{
+                    credit_id: id,
+                    reference_no: refNo,
+                    party_name: party,
+                    party_type: type === 'Sale' ? 'Customer' : 'Vendor',
+                    amount: remaining,
+                    payment_date: date || new Date().toISOString().split('T')[0],
+                    payment_mode: 'Cash',
+                    remarks: 'Full Settlement'
+                }]);
+            } catch (e) {}
         }
     }
 
@@ -748,9 +1034,12 @@ class StorageManager {
         const table = isSale ? 'sales' : 'purchases';
         
         if (!this.client) return;
+        let refNo = null;
+
         try {
-            const { data, error } = await this.client.from(table).select('*').eq('id', creditId).single();
+            const { data, error } = await this.client.from(table).select('*').eq('id', creditId).maybeSingle();
             if (data) {
+                refNo = isSale ? data.invoice_no : data.bill_no;
                 const total = parseFloat(isSale ? data.grand_total : data.total_amount) || 0;
                 const updatedReceived = Math.max(0, total - bal);
                 if (isSale) {
@@ -766,7 +1055,25 @@ class StorageManager {
                 }
             }
         } catch (e) {
-            console.error("Error updating credit balance:", e);
+            console.error("Error updating credit balance in source table:", e);
+        }
+
+        // Also update dedicated Supabase 'credits' table
+        try {
+            const status = bal <= 0 ? 'Paid' : 'Pending';
+            const updatePayload = {
+                current_due: bal,
+                status: status,
+                updated_at: new Date().toISOString()
+            };
+
+            if (this.isUUID(creditId)) {
+                await this.client.from('credits').update(updatePayload).or(`id.eq.${creditId},sale_id.eq.${creditId},purchase_id.eq.${creditId}`);
+            } else if (refNo) {
+                await this.client.from('credits').update(updatePayload).eq('reference_no', refNo);
+            }
+        } catch (e) {
+            console.warn("Notice: could not update 'credits' table balance:", e);
         }
     }
 
