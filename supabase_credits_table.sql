@@ -3,9 +3,11 @@
 -- Run this script in your Supabase SQL Editor (Dashboard > SQL Editor > New Query > Run)
 -- ==============================================================================
 
--- 0. Ensure columns exist on source tables before migration
+-- 0. Ensure required columns exist on source tables safely
 ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS remarks TEXT;
 ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS remarks TEXT;
 
 -- 1. Create the dedicated 'credits' table
 CREATE TABLE IF NOT EXISTS public.credits (
@@ -64,10 +66,10 @@ SELECT
     COALESCE(s.address, ''),
     s.date,
     COALESCE(
-        s.due_date, 
+        (to_jsonb(s)->>'due_date')::DATE, 
         CASE 
-            WHEN s.remarks ~ 'DueDate:[0-9]{4}-[0-9]{2}-[0-9]{2}' 
-            THEN (SUBSTRING(s.remarks FROM 'DueDate:([0-9]{4}-[0-9]{2}-[0-9]{2})'))::DATE 
+            WHEN (to_jsonb(s)->>'remarks') ~ 'DueDate:[0-9]{4}-[0-9]{2}-[0-9]{2}' 
+            THEN (SUBSTRING((to_jsonb(s)->>'remarks') FROM 'DueDate:([0-9]{4}-[0-9]{2}-[0-9]{2})'))::DATE 
             ELSE NULL 
         END,
         (s.date + INTERVAL '30 days')::DATE
@@ -79,7 +81,7 @@ SELECT
         WHEN COALESCE(s.balance, s.grand_total - COALESCE(s.received_amt, 0)) < s.grand_total THEN 'Partial'
         ELSE 'Pending' 
     END,
-    s.remarks
+    COALESCE(to_jsonb(s)->>'remarks', '')
 FROM public.sales s
 WHERE s.invoice_no IS NOT NULL 
   AND (COALESCE(s.balance, 0) > 0 OR s.payment_mode = 'Credit' OR (s.grand_total - COALESCE(s.received_amt, 0)) > 0)
@@ -102,12 +104,7 @@ SELECT
     '',
     p.date,
     COALESCE(
-        p.due_date, 
-        CASE 
-            WHEN p.remarks ~ 'DueDate:[0-9]{4}-[0-9]{2}-[0-9]{2}' 
-            THEN (SUBSTRING(p.remarks FROM 'DueDate:([0-9]{4}-[0-9]{2}-[0-9]{2})'))::DATE 
-            ELSE NULL 
-        END,
+        (to_jsonb(p)->>'due_date')::DATE,
         (p.date + INTERVAL '30 days')::DATE
     ),
     p.total_amount,
@@ -117,7 +114,7 @@ SELECT
         WHEN COALESCE(p.balance, p.total_amount - COALESCE(p.paid_amount, 0)) < p.total_amount THEN 'Partial'
         ELSE 'Pending' 
     END,
-    p.remarks
+    COALESCE(to_jsonb(p)->>'remarks', '')
 FROM public.purchases p
 WHERE p.bill_no IS NOT NULL 
   AND (COALESCE(p.balance, 0) > 0 OR (p.total_amount - COALESCE(p.paid_amount, 0)) > 0)
