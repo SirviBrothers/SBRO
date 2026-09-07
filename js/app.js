@@ -156,6 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Refresh data if specific tabs are opened
             if (targetId === 'home-tab') renderHomeDashboard();
+            if (targetId === 'billing-tab') refreshCustomerCache();
             if (targetId === 'sales-tab') renderSalesTable();
             if (targetId === 'credit-tab') renderCreditTable();
             if (targetId === 'inventory-tab') renderInventoryTable();
@@ -543,75 +544,199 @@ document.addEventListener('DOMContentLoaded', async () => {
     const buyerHistoryList = document.getElementById('buyer-history-list');
     const buyerHistoryDue = document.getElementById('buyer-history-due');
 
-    async function updateBuyerHistory() {
-        const typedName = buyerNameInput ? buyerNameInput.value.toLowerCase().trim() : '';
-        const typedMobile = buyerMobileInput ? buyerMobileInput.value.trim() : '';
-        if (!typedName && !typedMobile) {
+    // In-memory cache for ultra-fast customer matching and switching
+    let partiesCache = [];
+    let salesCache = [];
+    let creditsCache = [];
+    let lastMatchedCustomerName = '';
+    let isCustomerAutofilling = false;
+
+    async function refreshCustomerCache() {
+        try {
+            const [parties, sales, credits] = await Promise.all([
+                StorageManager.getParties(),
+                StorageManager.getSales(),
+                StorageManager.getCredits()
+            ]);
+            partiesCache = parties || [];
+            salesCache = sales || [];
+            creditsCache = credits || [];
+
+            // Populate #parties-list datalist with all unique customer/party names
+            const datalist = document.getElementById('parties-list');
+            if (datalist) {
+                const uniqueNames = new Set();
+                partiesCache.forEach(p => {
+                    if (p.name && p.name.trim()) uniqueNames.add(p.name.trim());
+                });
+                salesCache.forEach(s => {
+                    if (s.buyerName && s.buyerName.trim()) uniqueNames.add(s.buyerName.trim());
+                });
+                datalist.innerHTML = '';
+                uniqueNames.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    datalist.appendChild(opt);
+                });
+            }
+        } catch (err) {
+            console.error("Error refreshing customer cache:", err);
+        }
+    }
+
+    // Initialize cache immediately
+    refreshCustomerCache();
+
+    function findCustomerMatch(name, mobile) {
+        const cleanName = (name || '').toLowerCase().trim();
+        const cleanMobile = (mobile || '').trim();
+        if (!cleanName && !cleanMobile) return null;
+
+        // 1. Search in registered parties
+        let party = partiesCache.find(p => 
+            (cleanName && p.name && p.name.toLowerCase().trim() === cleanName) ||
+            (cleanMobile && p.mobile && p.mobile.trim() === cleanMobile)
+        );
+        if (party) {
+            return {
+                name: party.name,
+                mobile: party.mobile || '',
+                gstn: party.gstn || '',
+                address: party.address || ''
+            };
+        }
+
+        // 2. Fallback: Search in previous sales records
+        let saleMatch = salesCache.find(s => 
+            (cleanName && s.buyerName && s.buyerName.toLowerCase().trim() === cleanName) ||
+            (cleanMobile && s.mobile && s.mobile.trim() === cleanMobile)
+        );
+        if (saleMatch) {
+            return {
+                name: saleMatch.buyerName,
+                mobile: saleMatch.mobile || '',
+                gstn: saleMatch.gstn || '',
+                address: saleMatch.address || ''
+            };
+        }
+
+        return null;
+    }
+
+    function renderBuyerHistory(cleanName, cleanMobile) {
+        if (!buyerHistoryContainer) return;
+        if (!cleanName && !cleanMobile) {
+            buyerHistoryContainer.style.display = 'none';
+            return;
+        }
+
+        const partySales = salesCache.filter(s => 
+            (cleanName && s.buyerName && s.buyerName.toLowerCase().trim() === cleanName) ||
+            (cleanMobile && s.mobile && s.mobile.trim() === cleanMobile)
+        ).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
+        const partyCredits = creditsCache.filter(c => 
+            (cleanName && c.buyerName && c.buyerName.toLowerCase().trim() === cleanName) ||
+            (cleanMobile && c.mobile && c.mobile.trim() === cleanMobile)
+        );
+        const totalDue = partyCredits.reduce((sum, c) => sum + (c.dueAmount || c.balance || 0), 0);
+
+        if (buyerHistoryList) {
+            if (partySales.length > 0) {
+                buyerHistoryList.innerHTML = partySales.map(s => {
+                    const itemsStr = (s.items && s.items.length > 0) 
+                        ? s.items.map(i => `${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.price}`).join('<br>') 
+                        : 'No items';
+                    const amount = s.totalAmount || s.total || 0;
+                    const dueVal = (s.dueAmount || s.balance || 0);
+                    const dueStr = (dueVal > 0) 
+                        ? ` <span style="color: var(--danger-color); font-weight: bold;">(Due: ₹ ${dueVal.toFixed(2)})</span>` 
+                        : ` <span style="color: var(--success-color); font-weight: 500;">(Paid)</span>`;
+                    return `<li style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px dashed #e5e7eb;"><strong>${formatDateDDMMYY(s.date)}</strong>: Invoice #${s.invoiceNo} - <strong style="color: var(--secondary-color);">₹ ${amount.toFixed(2)}</strong>${dueStr}<br><small style="color: var(--text-muted); display: block; margin-top: 0.2rem;">${itemsStr}</small></li>`;
+                }).join('');
+            } else {
+                buyerHistoryList.innerHTML = '<li>No previous purchases found for this buyer.</li>';
+            }
+        }
+
+        if (buyerHistoryDue) buyerHistoryDue.textContent = `₹ ${Math.max(0, totalDue).toFixed(2)}`;
+        buyerHistoryContainer.style.display = 'block';
+    }
+
+    function handleBuyerNameChange() {
+        if (!buyerNameInput) return;
+        const typedName = buyerNameInput.value.toLowerCase().trim();
+
+        if (!typedName) {
+            // User cleared the customer name
+            if (lastMatchedCustomerName) {
+                if (buyerMobileInput) buyerMobileInput.value = '';
+                if (buyerGstnInput) buyerGstnInput.value = '';
+                if (buyerAddressInput) buyerAddressInput.value = '';
+                lastMatchedCustomerName = '';
+            }
             if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'none';
             return;
         }
 
-        try {
-            const [allSales, allCredits, parties] = await Promise.all([
-                StorageManager.getSales(),
-                StorageManager.getCredits(),
-                StorageManager.getParties()
-            ]);
+        const customer = findCustomerMatch(typedName, '');
 
-            const party = parties.find(p => 
-                (typedName && p.name && p.name.toLowerCase() === typedName) ||
-                (typedMobile && p.mobile && p.mobile === typedMobile)
-            );
+        if (customer) {
+            // Customer found - instantly autofill and fetch details!
+            lastMatchedCustomerName = customer.name.toLowerCase().trim();
+            isCustomerAutofilling = true;
+            if (buyerMobileInput) buyerMobileInput.value = customer.mobile || '';
+            if (buyerGstnInput) buyerGstnInput.value = customer.gstn || '';
+            if (buyerAddressInput) buyerAddressInput.value = customer.address || '';
+            isCustomerAutofilling = false;
 
-            if (party) {
-                if (!buyerMobileInput.value && party.mobile) buyerMobileInput.value = party.mobile;
-                if (!buyerGstnInput.value && party.gstn) buyerGstnInput.value = party.gstn;
-                if (!buyerAddressInput.value && party.address) buyerAddressInput.value = party.address;
+            renderBuyerHistory(customer.name.toLowerCase().trim(), (customer.mobile || '').trim());
+        } else {
+            // Customer not matched in current cache
+            if (lastMatchedCustomerName) {
+                // Switched from a known customer to a new/unknown name: clear fields so old details don't remain!
+                if (buyerMobileInput) buyerMobileInput.value = '';
+                if (buyerGstnInput) buyerGstnInput.value = '';
+                if (buyerAddressInput) buyerAddressInput.value = '';
+                lastMatchedCustomerName = '';
             }
+            if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'none';
+        }
+    }
 
-            const partySales = allSales.filter(s => 
-                (typedName && s.buyerName && s.buyerName.toLowerCase() === typedName) ||
-                (typedMobile && s.mobile && s.mobile === typedMobile)
-            ).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+    function handleBuyerMobileChange() {
+        if (isCustomerAutofilling || !buyerMobileInput) return;
+        const typedMobile = buyerMobileInput.value.trim();
 
-            const partyCredits = allCredits.filter(c => 
-                (typedName && c.buyerName && c.buyerName.toLowerCase() === typedName) ||
-                (typedMobile && c.mobile && c.mobile === typedMobile)
-            );
-            const totalDue = partyCredits.reduce((sum, c) => sum + (c.dueAmount || c.balance || 0), 0);
-
-            if (buyerHistoryList) {
-                if (partySales.length > 0) {
-                    buyerHistoryList.innerHTML = partySales.map(s => {
-                        const itemsStr = (s.items && s.items.length > 0) 
-                            ? s.items.map(i => `${i.category} - ${i.brand} (${i.variant}) x ${i.qty} - ₹${i.price}`).join('<br>') 
-                            : 'No items';
-                        const amount = s.totalAmount || s.total || 0;
-                        const dueVal = (s.dueAmount || s.balance || 0);
-                        const dueStr = (dueVal > 0) 
-                            ? ` <span style="color: var(--danger-color); font-weight: bold;">(Due: ₹ ${dueVal.toFixed(2)})</span>` 
-                            : ` <span style="color: var(--success-color); font-weight: 500;">(Paid)</span>`;
-                        return `<li style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px dashed #e5e7eb;"><strong>${formatDateDDMMYY(s.date)}</strong>: Invoice #${s.invoiceNo} - <strong style="color: var(--secondary-color);">₹ ${amount.toFixed(2)}</strong>${dueStr}<br><small style="color: var(--text-muted); display: block; margin-top: 0.2rem;">${itemsStr}</small></li>`;
-                    }).join('');
-                } else {
-                    buyerHistoryList.innerHTML = '<li>No previous purchases or sales found for this buyer.</li>';
+        if (typedMobile.length === 10) {
+            const customer = findCustomerMatch('', typedMobile);
+            if (customer) {
+                lastMatchedCustomerName = customer.name.toLowerCase().trim();
+                isCustomerAutofilling = true;
+                if (buyerNameInput && !buyerNameInput.value) {
+                    buyerNameInput.value = customer.name;
                 }
+                if (buyerGstnInput && !buyerGstnInput.value) {
+                    buyerGstnInput.value = customer.gstn || '';
+                }
+                if (buyerAddressInput && !buyerAddressInput.value) {
+                    buyerAddressInput.value = customer.address || '';
+                }
+                isCustomerAutofilling = false;
+                renderBuyerHistory(customer.name.toLowerCase().trim(), customer.mobile);
             }
-
-            if (buyerHistoryDue) buyerHistoryDue.textContent = `₹ ${Math.max(0, totalDue).toFixed(2)}`;
-            if (buyerHistoryContainer) buyerHistoryContainer.style.display = 'block';
-        } catch (err) {
-            console.error("Error updating buyer history:", err);
         }
     }
 
     if (buyerNameInput) {
-        buyerNameInput.addEventListener('input', updateBuyerHistory);
-        buyerNameInput.addEventListener('blur', updateBuyerHistory);
+        buyerNameInput.addEventListener('input', handleBuyerNameChange);
+        buyerNameInput.addEventListener('change', handleBuyerNameChange);
+        buyerNameInput.addEventListener('blur', handleBuyerNameChange);
     }
     if (buyerMobileInput) {
-        buyerMobileInput.addEventListener('input', updateBuyerHistory);
-        buyerMobileInput.addEventListener('blur', updateBuyerHistory);
+        buyerMobileInput.addEventListener('input', handleBuyerMobileChange);
+        buyerMobileInput.addEventListener('change', handleBuyerMobileChange);
+        buyerMobileInput.addEventListener('blur', handleBuyerMobileChange);
     }
 
     function calculateGrandTotal() {
@@ -762,6 +887,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Save Data
         await StorageManager.saveSale(billData, editingInvoiceNo !== null);
+        refreshCustomerCache();
 
         editingInvoiceNo = null;
         document.querySelector('#billing-tab .page-header h1').textContent = 'New Bill';
@@ -770,6 +896,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function resetForm() {
+        lastMatchedCustomerName = '';
         document.getElementById('buyer-name').value = '';
         document.getElementById('buyer-mobile').value = '';
         document.getElementById('buyer-gstn').value = '';
@@ -1183,16 +1310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- PARTIES DATALIST ---
     async function updatePartiesDatalist() {
-        const parties = await StorageManager.getParties();
-        const datalist = document.getElementById('parties-list');
-        if (datalist) {
-            datalist.innerHTML = '';
-            parties.forEach(p => {
-                const option = document.createElement('option');
-                option.value = p.name;
-                datalist.appendChild(option);
-            });
-        }
+        await refreshCustomerCache();
     }
     updatePartiesDatalist();
 
@@ -1211,15 +1329,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const parties = await StorageManager.getParties();
-            const party = parties.find(p => p.name.toLowerCase() === typedName);
+            const party = partiesCache.find(p => p.name && p.name.toLowerCase() === typedName);
 
             if (party) {
                 purchaseVendorMobileInput.value = party.mobile || '';
+                const vendorGstnInput = document.getElementById('purchase-vendor-gstn');
+                if (vendorGstnInput && party.gstn) vendorGstnInput.value = party.gstn;
 
                 // Fetch past purchases from this vendor
-                const purchases = await StorageManager.getPurchases()
-                    .filter(p => p.vendorName.toLowerCase() === typedName)
+                const allPurchases = await StorageManager.getPurchases();
+                const purchases = (allPurchases || [])
+                    .filter(p => p.vendorName && p.vendorName.toLowerCase() === typedName)
                     .sort((a, b) => b.id - a.id) // Newest first
                     .slice(0, 3); // Last 3 purchases
 
@@ -1818,6 +1938,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             partyModal.style.display = 'none';
             renderPartiesTable();
+            refreshCustomerCache();
         });
     }
 
