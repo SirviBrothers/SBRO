@@ -84,19 +84,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ======================================
 
     // Initialize Inventory on first load if empty
-    let inventory = await StorageManager.getInventory();
-    
-    // One-time migration: Apply HSN to existing inventory items if missing
-    let updated = false;
-    inventory = inventory.map(item => {
-        if (!item.hsn) {
-            item.hsn = getHsnForCategory(item.category);
-            updated = true;
+    try {
+        let inventory = await StorageManager.getInventory();
+        if (Array.isArray(inventory)) {
+            let updated = false;
+            inventory = inventory.map(item => {
+                if (!item.hsn) {
+                    item.hsn = getHsnForCategory(item.category);
+                    updated = true;
+                }
+                return item;
+            });
         }
-        return item;
-    });
-    if (updated) {
-        // localStorage.setItem disabled for Supabase
+    } catch (err) {
+        console.warn("Inventory pre-load warning:", err);
     }
 
     // Set default date
@@ -1830,7 +1831,12 @@ editingInvoiceNo = null;
     }
 
     // Initial renders
-    renderSalesTable();
-    renderCreditTable();
-    renderPartiesTable();
+    try {
+        if (typeof renderHomeDashboard === 'function') renderHomeDashboard();
+        if (typeof renderSalesTable === 'function') renderSalesTable();
+        if (typeof renderCreditTable === 'function') renderCreditTable();
+        if (typeof renderPartiesTable === 'function') renderPartiesTable();
+    } catch (err) {
+        console.warn("Initial render error:", err);
+    }
 });

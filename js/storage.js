@@ -4,18 +4,30 @@
 class StorageManager {
     static get client() {
         if (!window.supabaseClient) {
-            console.error("Supabase client not initialized.");
+            const fallbackUrl = 'https://ztlrayekobgcllnxmqft.supabase.co';
+            const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
+            if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+                const url = (window.__ENV__ && window.__ENV__.SUPABASE_URL) || fallbackUrl;
+                const key = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || fallbackKey;
+                window.supabaseClient = window.supabase.createClient(url, key);
+            }
         }
-        return window.supabaseClient;
+        return window.supabaseClient || null;
     }
 
     // ==========================================
     // PARTIES (Customers / Vendors)
     // ==========================================
     static async getParties() {
-        const { data, error } = await this.client.from('parties').select('*').order('created_at', { ascending: false });
-        if (error) console.error("Error fetching parties:", error);
-        return data || [];
+        if (!this.client) return [];
+        try {
+            const { data, error } = await this.client.from('parties').select('*').order('created_at', { ascending: false });
+            if (error) console.error("Error fetching parties:", error);
+            return data || [];
+        } catch (e) {
+            console.error("Error fetching parties:", e);
+            return [];
+        }
     }
 
     static async saveParty(partyData) {
@@ -77,9 +89,15 @@ class StorageManager {
     }
     
     static async getInventory() {
-        const { data, error } = await this.client.from('inventory').select('*').order('category', { ascending: true });
-        if (error) console.error("Error fetching inventory:", error);
-        return data || [];
+        if (!this.client) return [];
+        try {
+            const { data, error } = await this.client.from('inventory').select('*').order('category', { ascending: true });
+            if (error) console.error("Error fetching inventory:", error);
+            return data || [];
+        } catch (e) {
+            console.error("Error fetching inventory:", e);
+            return [];
+        }
     }
 
     static async saveInventoryItem(itemData) {
@@ -162,10 +180,19 @@ class StorageManager {
     // SALES / BILLS
     // ==========================================
     static async getSales() {
-        const { data, error } = await this.client.from('sales').select(`
-            *,
-            sale_items (*)
-        `).order('created_at', { ascending: false });
+        if (!this.client) return [];
+        let data, error;
+        try {
+            const res = await this.client.from('sales').select(`
+                *,
+                sale_items (*)
+            `).order('created_at', { ascending: false });
+            data = res.data;
+            error = res.error;
+        } catch (e) {
+            console.error("Exception in getSales:", e);
+            return [];
+        }
         
         if (error) {
             console.error("Error fetching sales:", error);
@@ -310,10 +337,19 @@ class StorageManager {
     // PURCHASES
     // ==========================================
     static async getPurchases() {
-        const { data, error } = await this.client.from('purchases').select(`
-            *,
-            purchase_items (*)
-        `).order('created_at', { ascending: false });
+        if (!this.client) return [];
+        let data, error;
+        try {
+            const res = await this.client.from('purchases').select(`
+                *,
+                purchase_items (*)
+            `).order('created_at', { ascending: false });
+            data = res.data;
+            error = res.error;
+        } catch (e) {
+            console.error("Exception in getPurchases:", e);
+            return [];
+        }
         
         if (error) {
             console.error("Error fetching purchases:", error);

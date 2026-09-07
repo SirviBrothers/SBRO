@@ -2,14 +2,20 @@
  * env-loader.js
  * Universal Environment & Supabase Configuration Loader
  * 
- * Sources configuration in order:
- * 1. window.__ENV__ (loaded from local gitignored js/env-config.js or injected by server)
- * 2. /api/config (if running via server.js or backend API)
- * 3. /.env runtime fetch (if running via static dev server like VS Code Live Server)
+ * Ensures Supabase client is always reliably initialized across:
+ * - GitHub Pages (static hosting with fallback defaults)
+ * - Local server (server.js with .env)
+ * - VS Code Live Server
+ * - Direct browser file inspection
  */
 
 (function () {
-    window.__ENV__ = window.__ENV__ || {};
+    const DEFAULT_CONFIG = {
+        SUPABASE_URL: "https://ztlrayekobgcllnxmqft.supabase.co",
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE"
+    };
+
+    window.__ENV__ = Object.assign({}, DEFAULT_CONFIG, window.__ENV__ || {});
 
     function parseEnvText(text) {
         const result = {};
@@ -30,17 +36,24 @@
         return result;
     }
 
-    window.getSupabaseConfig = async function () {
-        // 1. Already available synchronously in window.__ENV__
-        if (window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_ANON_KEY) {
-            return {
-                url: window.__ENV__.SUPABASE_URL,
-                anonKey: window.__ENV__.SUPABASE_ANON_KEY
-            };
+    // Helper to create or get client
+    function ensureClient() {
+        if (window.supabaseClient) return window.supabaseClient;
+        const url = window.__ENV__.SUPABASE_URL || DEFAULT_CONFIG.SUPABASE_URL;
+        const key = window.__ENV__.SUPABASE_ANON_KEY || DEFAULT_CONFIG.SUPABASE_ANON_KEY;
+        if (url && key && typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+            window.supabaseClient = window.supabase.createClient(url, key);
+            return window.supabaseClient;
         }
+        return null;
+    }
 
-        // 2. Try fetching from /api/config (supported when running server.js)
-        if (window.location.protocol.startsWith('http')) {
+    // Attempt immediate synchronous initialization
+    ensureClient();
+
+    window.getSupabaseConfig = async function () {
+        // Check if server or .env has fresh overrides
+        if (window.location && window.location.protocol.startsWith('http')) {
             try {
                 const res = await fetch('/api/config');
                 if (res.ok) {
@@ -48,14 +61,11 @@
                     if (data.SUPABASE_URL && data.SUPABASE_ANON_KEY) {
                         window.__ENV__.SUPABASE_URL = data.SUPABASE_URL;
                         window.__ENV__.SUPABASE_ANON_KEY = data.SUPABASE_ANON_KEY;
-                        return { url: data.SUPABASE_URL, anonKey: data.SUPABASE_ANON_KEY };
+                        ensureClient();
                     }
                 }
-            } catch (e) {
-                // Server endpoint not available, proceed to fallback
-            }
+            } catch (e) {}
 
-            // 3. Try fetching /.env directly (works in VS Code Live Server)
             try {
                 const envRes = await fetch('/.env');
                 if (envRes.ok) {
@@ -64,34 +74,22 @@
                     if (parsed.SUPABASE_URL && parsed.SUPABASE_ANON_KEY) {
                         window.__ENV__.SUPABASE_URL = parsed.SUPABASE_URL;
                         window.__ENV__.SUPABASE_ANON_KEY = parsed.SUPABASE_ANON_KEY;
-                        return { url: parsed.SUPABASE_URL, anonKey: parsed.SUPABASE_ANON_KEY };
+                        ensureClient();
                     }
                 }
-            } catch (e) {
-                // Fallback failed
-            }
+            } catch (e) {}
         }
 
-        // 4. Return whatever is present (or empty)
         return {
-            url: window.__ENV__.SUPABASE_URL || '',
-            anonKey: window.__ENV__.SUPABASE_ANON_KEY || ''
+            url: window.__ENV__.SUPABASE_URL || DEFAULT_CONFIG.SUPABASE_URL,
+            anonKey: window.__ENV__.SUPABASE_ANON_KEY || DEFAULT_CONFIG.SUPABASE_ANON_KEY
         };
     };
 
-    // Helper to initialize or ensure window.supabaseClient is created
     window.initSupabaseClient = async function () {
+        ensureClient();
         if (window.supabaseClient) return window.supabaseClient;
-        const config = await window.getSupabaseConfig();
-        if (config.url && config.url.startsWith('http') && config.anonKey && window.supabase) {
-            window.supabaseClient = window.supabase.createClient(config.url, config.anonKey);
-            return window.supabaseClient;
-        }
-        return null;
+        await window.getSupabaseConfig();
+        return ensureClient();
     };
-
-    // Auto-attempt synchronous initialization if credentials already exist
-    if (window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_ANON_KEY && window.supabase) {
-        window.supabaseClient = window.supabase.createClient(window.__ENV__.SUPABASE_URL, window.__ENV__.SUPABASE_ANON_KEY);
-    }
 })();

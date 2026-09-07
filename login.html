@@ -376,10 +376,23 @@
 <script src="js/env-loader.js"></script>
 <script>
     async function initLoginPage() {
-        const client = await window.initSupabaseClient();
+        const fallbackUrl = 'https://ztlrayekobgcllnxmqft.supabase.co';
+        const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
+        
+        let client = window.supabaseClient;
+        if (!client && typeof window.initSupabaseClient === 'function') {
+            client = await window.initSupabaseClient();
+        }
+        if (!client && window.supabase && typeof window.supabase.createClient === 'function') {
+            const url = (window.__ENV__ && window.__ENV__.SUPABASE_URL) || fallbackUrl;
+            const key = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || fallbackKey;
+            client = window.supabase.createClient(url, key);
+            window.supabaseClient = client;
+        }
+
         const googleBtn = document.getElementById('google-signin-btn');
 
-        if (client) {
+        if (client && client.auth) {
             googleBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const { data, error } = await client.auth.signInWithOAuth({
@@ -398,11 +411,11 @@
                 if (session) {
                     window.location.href = 'index.html';
                 }
-            });
+            }).catch(() => {});
         } else {
             googleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                alert('Supabase configuration missing! Please ensure .env file is configured.');
+                alert('Supabase client could not be initialized.');
             });
         }
     }

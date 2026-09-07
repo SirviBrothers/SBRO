@@ -1,21 +1,36 @@
 // Supabase Configuration loaded dynamically from environment
+const SUPABASE_FALLBACK_URL = 'https://ztlrayekobgcllnxmqft.supabase.co';
+const SUPABASE_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
+
+function getSupabaseClient() {
+    if (window.supabaseClient) return window.supabaseClient;
+    const url = (window.__ENV__ && window.__ENV__.SUPABASE_URL) || SUPABASE_FALLBACK_URL;
+    const key = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || SUPABASE_FALLBACK_KEY;
+    if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+        window.supabaseClient = window.supabase.createClient(url, key);
+        return window.supabaseClient;
+    }
+    return null;
+}
+
+// Ensure client exists immediately
+getSupabaseClient();
+
 async function setupAuth() {
-    let client = window.supabaseClient;
+    let client = getSupabaseClient();
     if (!client && typeof window.initSupabaseClient === 'function') {
         client = await window.initSupabaseClient();
     }
-    if (!client && window.__ENV__ && window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_ANON_KEY && window.supabase) {
-        client = window.supabase.createClient(window.__ENV__.SUPABASE_URL, window.__ENV__.SUPABASE_ANON_KEY);
-        window.supabaseClient = client;
-    }
 
-    if (client) {
+    if (client && client.auth) {
         // Check session on page load
         client.auth.getSession().then(({ data: { session } }) => {
             if (!session) {
                 // Not logged in! Redirect to login page
                 window.location.href = 'login.html';
             }
+        }).catch(err => {
+            console.warn('Session check warning:', err);
         });
 
         // Listen for sign-out events
@@ -24,13 +39,12 @@ async function setupAuth() {
                 window.location.href = 'login.html';
             }
         });
-    } else {
-        console.warn('Supabase configuration missing or client not initialized. Check .env file.');
     }
 }
 
 // Run auth check
 setupAuth();
+
 
 
 // Authentication & Security Manager
