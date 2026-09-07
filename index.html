@@ -106,8 +106,8 @@
                 <div id="mantra-container" style="font-style: italic; color: #B45309; font-weight: 700; font-size: 1.3rem; flex: 1; text-align: center;">
                     || ॐ श्री गणेशाय नमः ||
                 </div>
-                <button id="whatsapp-digest-btn" class="btn btn-secondary" title="Configure & Send WhatsApp Credit Digest" style="display: flex; align-items: center; gap: 0.5rem; color: #16A34A; border: 1px solid #86EFAC; background: rgba(34, 197, 94, 0.08); font-weight: 600; padding: 0.5rem 1rem; border-radius: var(--radius-md); margin-right: 0.75rem; cursor: pointer; transition: all 0.2s;">
-                    <i class="ph ph-whatsapp-logo" style="font-size: 1.3rem;"></i> WhatsApp Digest
+                <button id="whatsapp-digest-btn" class="btn btn-secondary" title="Save Credit Report & Send to WhatsApp" style="display: flex; align-items: center; gap: 0.5rem; color: #16A34A; border: 1px solid #86EFAC; background: rgba(34, 197, 94, 0.08); font-weight: 600; padding: 0.5rem 1rem; border-radius: var(--radius-md); margin-right: 0.75rem; cursor: pointer; transition: all 0.2s;">
+                    <i class="ph ph-whatsapp-logo" style="font-size: 1.3rem;"></i> Save Credit Report
                 </button>
                 <a href="#" id="supabase-logout-btn" class="btn btn-secondary" style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.5rem 1rem; color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-weight: 500; transition: all 0.2s;">
                     <i class="ph ph-sign-out"></i> Logout
@@ -387,8 +387,11 @@
 
             <!-- Tab: Credit / Due -->
             <section id="credit-tab" class="tab-pane">
-                <div class="page-header">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h1>Credit / Due</h1>
+                    <button id="credit-tab-save-report-btn" class="btn btn-secondary" title="Save Credit Report & Send to WhatsApp" style="display: flex; align-items: center; gap: 0.5rem; color: #16A34A; border: 1px solid #86EFAC; background: rgba(34, 197, 94, 0.08); font-weight: 600; padding: 0.5rem 1rem; border-radius: var(--radius-md); cursor: pointer;">
+                        <i class="ph ph-whatsapp-logo" style="font-size: 1.2rem;"></i> Save Credit Report
+                    </button>
                 </div>
 
                 <div class="data-card">
@@ -943,6 +946,47 @@
                     <i class="ph ph-paper-plane-tilt"></i> Send Test Digest Now
                 </button>
                 <button class="btn btn-primary" id="save-wa-settings-btn" style="flex: 1;">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Credit Report & Send to WhatsApp Modal -->
+    <div class="modal-overlay" id="credit-report-modal" style="display: none; z-index: 10002;">
+        <div class="modal-content" style="width: 580px; max-width: 92vw; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="background: rgba(37, 211, 102, 0.15); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="ph ph-whatsapp-logo" style="color: #25D366; font-size: 22px;"></i>
+                    </div>
+                    <h2 style="margin: 0; font-size: 1.2rem; color: var(--text-main);">Save Credit Report</h2>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="close-credit-report-modal-btn"><i class="ph ph-x"></i></button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; color: var(--text-main);">
+                        Recipient WhatsApp Mobile Number:
+                    </label>
+                    <input type="tel" id="credit-report-phone" placeholder="Enter 10-digit mobile number (e.g. 9829012345)" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.95rem;">
+                    <small style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; display: block;">Enter 10-digit mobile number (country code 91 is added automatically), or leave blank to choose chat in WhatsApp.</small>
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; color: var(--text-main);">
+                        Credit Report Preview:
+                    </label>
+                    <textarea id="credit-report-preview-text" readonly style="width: 100%; height: 220px; font-family: monospace; font-size: 0.85rem; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: #F9FAFB; resize: vertical; line-height: 1.4;"></textarea>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-secondary" id="copy-credit-report-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="ph ph-copy"></i> Copy Text
+                </button>
+                <button class="btn btn-success" id="send-credit-report-wa-btn" style="flex: 2; display: flex; align-items: center; justify-content: center; gap: 6px; background: #25D366; color: white; border: none; font-weight: 600; font-size: 0.95rem; cursor: pointer; padding: 0.6rem 1rem; border-radius: 8px;">
+                    <i class="ph ph-whatsapp-logo" style="font-size: 1.25rem;"></i> Send to WhatsApp
+                </button>
             </div>
         </div>
     </div>

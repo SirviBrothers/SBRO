@@ -425,13 +425,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (freqSelect) freqSelect.value = settings.frequency || 'once_per_day';
     }
 
-    if (digestBtn && modal) {
-        digestBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            populateModal();
-            modal.style.display = 'flex';
-        });
-    }
+    // Digest settings can still be opened programmatically or via settings if needed
+    // The top button is now dedicated to Save Credit Report
+    // if (digestBtn && modal) { ... }
 
     if (closeBtn && modal) {
         closeBtn.addEventListener('click', () => {

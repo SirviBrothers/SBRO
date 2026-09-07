@@ -307,48 +307,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GST Bill Controls
     const isGstCheckbox = document.getElementById('is-gst-bill');
     const gstRateGroup = document.getElementById('gst-rate-group');
-    const customGstInput = document.getElementById('custom-gst-rate');
-    const selectedGstInput = document.getElementById('selected-gst-rate');
+    const gstRateSelect = document.getElementById('gst-rate');
+    const gstRateCustom = document.getElementById('gst-rate-custom');
     const subtotalDisplayGroup = document.getElementById('subtotal-display-group');
     const taxDisplayGroup = document.getElementById('tax-display-group');
-    const billSubtotalSpan = document.getElementById('bill-subtotal');
-    const billTaxSpan = document.getElementById('bill-tax');
-    const taxLabelSpan = document.getElementById('tax-label');
+
+    function getActiveGstRate() {
+        if (!isGstCheckbox || !isGstCheckbox.checked) return 0;
+        if (!gstRateSelect) return 18;
+        if (gstRateSelect.value === 'custom') {
+            return parseFloat(gstRateCustom ? gstRateCustom.value : 0) || 0;
+        }
+        return parseFloat(gstRateSelect.value) || 18;
+    }
 
     if (isGstCheckbox) {
         isGstCheckbox.addEventListener('change', () => {
             const isChecked = isGstCheckbox.checked;
             if (gstRateGroup) gstRateGroup.style.display = isChecked ? 'block' : 'none';
-            if (subtotalDisplayGroup) subtotalDisplayGroup.style.display = isChecked ? 'flex' : 'none';
-            if (taxDisplayGroup) taxDisplayGroup.style.display = isChecked ? 'flex' : 'none';
+            if (subtotalDisplayGroup) subtotalDisplayGroup.style.display = isChecked ? 'block' : 'none';
+            if (taxDisplayGroup) taxDisplayGroup.style.display = isChecked ? 'block' : 'none';
             calculateGrandTotal();
         });
     }
 
-    document.querySelectorAll('.gst-preset-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.gst-preset-btn').forEach(b => {
-                b.classList.remove('btn-primary');
-                b.classList.add('btn-secondary');
-            });
-            btn.classList.remove('btn-secondary');
-            btn.classList.add('btn-primary');
-            const rate = btn.dataset.rate;
-            if (selectedGstInput) selectedGstInput.value = rate;
-            if (customGstInput) customGstInput.value = '';
+    if (gstRateSelect) {
+        gstRateSelect.addEventListener('change', () => {
+            if (gstRateSelect.value === 'custom') {
+                if (gstRateCustom) {
+                    gstRateCustom.style.display = 'block';
+                    gstRateCustom.focus();
+                }
+            } else {
+                if (gstRateCustom) gstRateCustom.style.display = 'none';
+            }
             calculateGrandTotal();
         });
-    });
+    }
 
-    if (customGstInput) {
-        customGstInput.addEventListener('input', (e) => {
-            document.querySelectorAll('.gst-preset-btn').forEach(b => {
-                b.classList.remove('btn-primary');
-                b.classList.add('btn-secondary');
-            });
-            const rate = parseFloat(e.target.value) || 0;
-            if (selectedGstInput) selectedGstInput.value = rate;
+    if (gstRateCustom) {
+        gstRateCustom.addEventListener('input', () => {
             calculateGrandTotal();
         });
     }
@@ -617,29 +615,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function calculateGrandTotal() {
-        let subtotal = 0;
+        let grossTotal = 0;
         document.querySelectorAll('.item-amount-display').forEach(el => {
-            subtotal += parseFloat(el.dataset.value || 0);
+            grossTotal += parseFloat(el.dataset.value || 0);
         });
 
-        let grandTotal = subtotal;
         const isGst = isGstCheckbox && isGstCheckbox.checked;
+        const rate = getActiveGstRate();
 
-        if (isGst) {
-            const rate = parseFloat(selectedGstInput ? selectedGstInput.value : 18) || 0;
-            const taxAmt = (subtotal * rate) / 100;
-            grandTotal = subtotal + taxAmt;
+        // Amount entered is GST INCLUDED (backward calculation)
+        const grandTotal = grossTotal;
+        const baseSubtotal = isGst ? (grandTotal / (1 + (rate / 100))) : grandTotal;
+        const taxAmt = isGst ? (grandTotal - baseSubtotal) : 0;
 
-            if (billSubtotalSpan) billSubtotalSpan.textContent = `₹ ${subtotal.toFixed(2)}`;
-            if (taxLabelSpan) taxLabelSpan.textContent = `GST (${rate}%):`;
-            if (billTaxSpan) billTaxSpan.textContent = `₹ ${taxAmt.toFixed(2)}`;
-        }
-
+        const subtotalAmountEl = document.getElementById('subtotal-amount');
+        const taxAmountEl = document.getElementById('tax-amount');
+        const taxRateDisplayEl = document.getElementById('tax-rate-display');
         const grandTotalEl = document.getElementById('grand-total');
+
+        if (subtotalAmountEl) subtotalAmountEl.textContent = `₹ ${baseSubtotal.toFixed(2)}`;
+        if (taxRateDisplayEl) taxRateDisplayEl.textContent = `${rate}%`;
+        if (taxAmountEl) taxAmountEl.textContent = `₹ ${taxAmt.toFixed(2)}`;
+
         if (grandTotalEl) {
             grandTotalEl.textContent = `₹ ${grandTotal.toFixed(2)}`;
             grandTotalEl.dataset.value = grandTotal;
-            grandTotalEl.dataset.subtotal = subtotal;
+            grandTotalEl.dataset.subtotal = baseSubtotal;
+            grandTotalEl.dataset.tax = taxAmt;
+            grandTotalEl.dataset.rate = rate;
         }
         
         if (!isPaidAmountManuallyEdited && paidAmountInput) {
@@ -711,9 +714,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const isGst = isGstCheckbox && isGstCheckbox.checked;
-        const gstRate = isGst ? (parseFloat(selectedGstInput ? selectedGstInput.value : 18) || 0) : 0;
-        const taxAmount = isGst ? ((subtotal * gstRate) / 100) : 0;
-        const grandTotal = subtotal + taxAmount;
+        const gstRate = getActiveGstRate();
+        const grandTotal = subtotal; // Amounts entered are GST included
+        const taxAmount = isGst ? (grandTotal - (grandTotal / (1 + (gstRate / 100)))) : 0;
+        const baseSubtotal = isGst ? (grandTotal - taxAmount) : grandTotal;
 
         const invoiceNo = editingInvoiceNo !== null ? editingInvoiceNo : await StorageManager.getNextInvoiceNo();
         let paidAmount = parseFloat(paidAmountInput.value);
@@ -734,7 +738,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             dueAmount,
             dueDate,
             items,
-            subtotal,
+            subtotal: baseSubtotal,
             isGstBill: isGst,
             gstRate,
             taxAmount,
@@ -2007,6 +2011,102 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('close-history-modal-btn')?.addEventListener('click', async () => {
         document.getElementById('payment-history-modal').style.display = 'none';
+    });
+
+    // --- SAVE CREDIT REPORT / WHATSAPP DISPATCHER ---
+    async function openCreditReportModal() {
+        const modal = document.getElementById('credit-report-modal');
+        const previewText = document.getElementById('credit-report-preview-text');
+        const phoneInput = document.getElementById('credit-report-phone');
+        if (!modal) return;
+
+        const credits = await StorageManager.getCredits();
+        let msg = `credit report - Sirvi Brothers\n`;
+        msg += `Date: ${new Date().toLocaleDateString('en-GB')}\n`;
+        msg += `------------------------------------\n\n`;
+
+        if (!credits || credits.length === 0) {
+            msg += `No credit / due records found.\n`;
+        } else {
+            let totalOriginal = 0;
+            let totalCurrentDue = 0;
+
+            credits.forEach((c, idx) => {
+                const remaining = Math.max(0, parseFloat(c.dueAmount || c.balance) || 0);
+                const original = parseFloat(c.originalDue || c.total) || 0;
+                totalOriginal += original;
+                totalCurrentDue += remaining;
+
+                const dateStr = c.date ? formatDateDDMMYY(c.date) : '-';
+                const dueDateStr = c.dueDate ? formatDateDDMMYY(c.dueDate) : '-';
+                const partyName = c.buyerName || c.vendorName || c.partyName || 'N/A';
+                const typeStr = c.type || 'Sale';
+                const mobile = c.mobile || '-';
+                const address = c.address || '-';
+                const status = remaining <= 0 ? 'Paid' : (remaining < original ? 'Partial' : 'Pending');
+
+                msg += `${idx + 1}. ${partyName} (${typeStr})\n`;
+                msg += `   Date: ${dateStr}\n`;
+                msg += `   Mobile: ${mobile}\n`;
+                if (address && address !== '-') msg += `   Address: ${address}\n`;
+                msg += `   Due Date: ${dueDateStr}\n`;
+                msg += `   Original Due: ₹${original.toFixed(2)}\n`;
+                msg += `   Current Due: ₹${remaining.toFixed(2)}\n`;
+                msg += `   Status: ${status}\n\n`;
+            });
+
+            msg += `------------------------------------\n`;
+            msg += `Total Records: ${credits.length}\n`;
+            msg += `Total Original: ₹${totalOriginal.toFixed(2)}\n`;
+            msg += `Total Outstanding Due: ₹${totalCurrentDue.toFixed(2)}\n`;
+            msg += `------------------------------------\n`;
+            msg += `Sirvi Brothers`;
+        }
+
+        if (previewText) previewText.value = msg;
+        if (phoneInput) {
+            const saved = localStorage.getItem('wa_credit_report_phone') || '';
+            phoneInput.value = saved;
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    document.getElementById('whatsapp-digest-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        openCreditReportModal();
+    });
+
+    document.getElementById('credit-tab-save-report-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        openCreditReportModal();
+    });
+
+    document.getElementById('close-credit-report-modal-btn')?.addEventListener('click', () => {
+        const modal = document.getElementById('credit-report-modal');
+        if (modal) modal.style.display = 'none';
+    });
+
+    document.getElementById('copy-credit-report-btn')?.addEventListener('click', async () => {
+        const previewText = document.getElementById('credit-report-preview-text');
+        if (previewText) {
+            await navigator.clipboard.writeText(previewText.value);
+            alert('Credit report text copied to clipboard!');
+        }
+    });
+
+    document.getElementById('send-credit-report-wa-btn')?.addEventListener('click', () => {
+        const phoneInput = document.getElementById('credit-report-phone');
+        const previewText = document.getElementById('credit-report-preview-text');
+        let phone = (phoneInput?.value || '').trim().replace(/\D/g, '');
+        if (phone.length === 10) phone = '91' + phone;
+        if (phone) localStorage.setItem('wa_credit_report_phone', phone);
+
+        const text = encodeURIComponent(previewText ? previewText.value : '');
+        const waUrl = phone ? `https://api.whatsapp.com/send?phone=${phone}&text=${text}` : `https://api.whatsapp.com/send?text=${text}`;
+        window.open(waUrl, '_blank');
+        const modal = document.getElementById('credit-report-modal');
+        if (modal) modal.style.display = 'none';
     });
 
     // --- MANTRA ROTATION LOGIC ---

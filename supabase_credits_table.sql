@@ -38,20 +38,34 @@ CREATE INDEX IF NOT EXISTS idx_credits_mobile ON public.credits(mobile);
 CREATE INDEX IF NOT EXISTS idx_credits_status ON public.credits(status);
 CREATE INDEX IF NOT EXISTS idx_credits_date ON public.credits(date DESC);
 
--- 3. Row-Level Security (RLS) Configuration
-ALTER TABLE public.credits ENABLE ROW LEVEL SECURITY;
-
--- Allow authenticated users full access
-DROP POLICY IF EXISTS "Allow authenticated full access on credits" ON public.credits;
-CREATE POLICY "Allow authenticated full access on credits" 
-    ON public.credits FOR ALL TO authenticated 
-    USING (true) WITH CHECK (true);
-
--- Allow anon public access full access
-DROP POLICY IF EXISTS "Allow anon full access on credits" ON public.credits;
-CREATE POLICY "Allow anon full access on credits" 
-    ON public.credits FOR ALL TO anon 
-    USING (true) WITH CHECK (true);
+-- 3. Row-Level Security (RLS) Configuration for ALL tables
+DO $$
+DECLARE
+    tbl text;
+BEGIN
+    FOR tbl IN 
+        SELECT unnest(ARRAY[
+            'parties', 
+            'inventory', 
+            'sales', 
+            'sale_items', 
+            'purchases', 
+            'purchase_items', 
+            'credit_payments',
+            'credits'
+        ])
+    LOOP
+        IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+            EXECUTE format('DROP POLICY IF EXISTS "Allow authenticated full access on %s" ON public.%I;', tbl, tbl);
+            EXECUTE format('DROP POLICY IF EXISTS "Allow authenticated full access" ON public.%I;', tbl);
+            EXECUTE format('CREATE POLICY "Allow authenticated full access on %s" ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true);', tbl, tbl);
+            EXECUTE format('DROP POLICY IF EXISTS "Allow anon full access on %s" ON public.%I;', tbl, tbl);
+            EXECUTE format('DROP POLICY IF EXISTS "Allow anon full access" ON public.%I;', tbl);
+            EXECUTE format('CREATE POLICY "Allow anon full access on %s" ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true);', tbl, tbl);
+        END IF;
+    END LOOP;
+END $$;
 
 -- 4. Initial Migration: Populate existing unpaid sales into the credits table
 INSERT INTO public.credits (
