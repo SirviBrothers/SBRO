@@ -1,27 +1,37 @@
-// Supabase Configuration for Secure Routing (PASTE YOUR KEYS HERE)
-const SUPABASE_URL = 'https://ztlrayekobgcllnxmqft.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
+// Supabase Configuration loaded dynamically from environment
+async function setupAuth() {
+    let client = window.supabaseClient;
+    if (!client && typeof window.initSupabaseClient === 'function') {
+        client = await window.initSupabaseClient();
+    }
+    if (!client && window.__ENV__ && window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_ANON_KEY && window.supabase) {
+        client = window.supabase.createClient(window.__ENV__.SUPABASE_URL, window.__ENV__.SUPABASE_ANON_KEY);
+        window.supabaseClient = client;
+    }
 
-if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
-    window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
-    // Check session on page load
-    window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
-        if (!session) {
-            // Not logged in! Redirect to login page
-            window.location.href = 'login.html';
-        }
-    });
-    
-    // Listen for sign-out events (Optional future feature)
-    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT') {
-            window.location.href = 'login.html';
-        }
-    });
-} else {
-    console.warn('Supabase keys missing in auth.js. Secure routing bypassed for testing.');
+    if (client) {
+        // Check session on page load
+        client.auth.getSession().then(({ data: { session } }) => {
+            if (!session) {
+                // Not logged in! Redirect to login page
+                window.location.href = 'login.html';
+            }
+        });
+
+        // Listen for sign-out events
+        client.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                window.location.href = 'login.html';
+            }
+        });
+    } else {
+        console.warn('Supabase configuration missing or client not initialized. Check .env file.');
+    }
 }
+
+// Run auth check
+setupAuth();
+
 
 // Authentication & Security Manager
 

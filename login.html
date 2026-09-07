@@ -372,42 +372,42 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/env-config.js"></script>
+<script src="js/env-loader.js"></script>
 <script>
-    // Supabase Configuration (PASTE YOUR KEYS HERE)
-    const SUPABASE_URL = 'https://ztlrayekobgcllnxmqft.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE';
-    
-    // Only initialize if keys are present to prevent crashes
-    if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
-        window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
-        document.getElementById('google-signin-btn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.href.replace('login.html', 'index.html')
+    async function initLoginPage() {
+        const client = await window.initSupabaseClient();
+        const googleBtn = document.getElementById('google-signin-btn');
+
+        if (client) {
+            googleBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const { data, error } = await client.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href.replace('login.html', 'index.html')
+                    }
+                });
+                if (error) {
+                    alert('Login failed: ' + error.message);
                 }
             });
-            if (error) {
-                alert('Login failed: ' + error.message);
-            }
-        });
-        
-        // If already logged in, redirect to dashboard automatically
-        window.supabaseClient.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                window.location.href = 'index.html';
-            }
-        });
-    } else {
-        // Fallback for demo purposes if keys aren't added yet
-        document.getElementById('google-signin-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            alert('Supabase keys missing! Please add them to the code.');
-            // window.location.href = 'index.html'; // uncomment to bypass
-        });
+
+            // If already logged in, redirect to dashboard automatically
+            client.auth.getSession().then(({ data: { session } }) => {
+                if (session) {
+                    window.location.href = 'index.html';
+                }
+            });
+        } else {
+            googleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                alert('Supabase configuration missing! Please ensure .env file is configured.');
+            });
+        }
     }
+
+    initLoginPage();
 </script>
 
 </body>

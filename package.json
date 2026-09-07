@@ -1,0 +1,17 @@
+{
+  "name": "sirvi-brothers",
+  "version": "1.0.0",
+  "description": "Sirvi Brothers Electricals Inventory & Billing Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "sync-env": "node sync-env.js"
+  },
+  "keywords": [
+    "inventory",
+    "billing",
+    "supabase"
+  ],
+  "author": "",
+  "license": "ISC"
+}
