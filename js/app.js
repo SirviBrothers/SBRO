@@ -172,130 +172,572 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- HOME DASHBOARD UI ---
+    let currentDashboardDateRange = 'all';
+
+    // Dashboard Quick Action Listeners
+    const dashBtnNewBill = document.getElementById('dash-btn-new-bill');
+    if (dashBtnNewBill) {
+        dashBtnNewBill.addEventListener('click', () => {
+            const billNav = document.querySelector('.nav-item[data-target="billing-tab"]');
+            if (billNav) billNav.click();
+        });
+    }
+
+    const dashBtnNewPurchase = document.getElementById('dash-btn-new-purchase');
+    if (dashBtnNewPurchase) {
+        dashBtnNewPurchase.addEventListener('click', () => {
+            const purchaseNav = document.querySelector('.nav-item[data-target="purchases-tab"]');
+            if (purchaseNav) purchaseNav.click();
+        });
+    }
+
+    const dashViewAllSales = document.getElementById('dash-view-all-sales');
+    if (dashViewAllSales) {
+        dashViewAllSales.addEventListener('click', () => {
+            const salesNav = document.querySelector('.nav-item[data-target="sales-tab"]');
+            if (salesNav) salesNav.click();
+        });
+    }
+
+    // Dashboard Date Range Filter Pills
+    document.querySelectorAll('#dash-date-filters .filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('#dash-date-filters .filter-btn').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentDashboardDateRange = e.currentTarget.dataset.range || 'all';
+            renderHomeDashboard();
+        });
+    });
+
+    // Chart instances registry
+    let dashSalesTrendChartInstance = null;
+    let dashCashFlowChartInstance = null;
+    let dashCategoryChartInstance = null;
+    let dashPaymentHealthChartInstance = null;
+
     async function renderHomeDashboard() {
-        const sales = await StorageManager.getSales();
-        const credits = await StorageManager.getCredits();
-        
-        let todaySales = 0;
-        let weeklySales = 0;
-        let monthlySales = 0;
-        let totalRevenue = 0;
-        
+        const [sales, purchases, credits, inventory, parties] = await Promise.all([
+            StorageManager.getSales(),
+            StorageManager.getPurchases(),
+            StorageManager.getCredits(),
+            StorageManager.getInventory(),
+            StorageManager.getParties()
+        ]);
+
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const startOfWeek = startOfDay - (now.getDay() * 24 * 60 * 60 * 1000); // Rough start of week
+        const startOfWeek = startOfDay - (now.getDay() * 24 * 60 * 60 * 1000);
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
 
-        sales.forEach(sale => {
-            const saleDate = new Date(sale.date).getTime();
-            totalRevenue += (sale.total || 0);
-            
-            if (saleDate >= startOfDay) todaySales += sale.total;
-            if (saleDate >= startOfWeek) weeklySales += sale.total;
-            if (saleDate >= startOfMonth) monthlySales += sale.total;
-        });
+        // 1. Time-filtered Sales & Purchases
+        let filteredSales = sales;
+        let filteredPurchases = purchases;
 
-        const avgOrder = sales.length > 0 ? (totalRevenue / sales.length) : 0;
-        
-        let totalDue = 0;
-        credits.forEach(credit => {
-            if (credit.status !== 'Paid') {
-                const totalPaid = credit.payments ? credit.payments.reduce((sum, p) => sum + p.amount, 0) : 0;
-                totalDue += ((credit.total || 0) - totalPaid);
-            }
-        });
-
-        const eToday = document.getElementById('dash-daily-sales');
-        if(eToday) eToday.textContent = `₹ ${todaySales.toFixed(2)}`;
-        
-        const eWeek = document.getElementById('dash-weekly-sales');
-        if(eWeek) eWeek.textContent = `₹ ${weeklySales.toFixed(2)}`;
-        
-        const eMonth = document.getElementById('dash-monthly-sales');
-        if(eMonth) eMonth.textContent = `₹ ${monthlySales.toFixed(2)}`;
-        
-        const eAvg = document.getElementById('dash-avg-order');
-        if(eAvg) eAvg.textContent = `₹ ${avgOrder.toFixed(2)}`;
-        
-        const eDue = document.getElementById('dash-total-due');
-        if(eDue) eDue.textContent = `₹ ${totalDue.toFixed(2)}`;
-
-        // Hero Product
-        let itemCounts = {};
-        sales.forEach(sale => {
-            if(sale.items) {
-                sale.items.forEach(item => {
-                    const key = `${item.brand} ${item.variant}`;
-                    itemCounts[key] = (itemCounts[key] || 0) + item.qty;
-                });
-            }
-        });
-        let heroProduct = 'No Sales Yet';
-        let maxQty = 0;
-        for (let key in itemCounts) {
-            if (itemCounts[key] > maxQty) {
-                maxQty = itemCounts[key];
-                heroProduct = `${key} <br><span style="font-size: 0.85rem; color:#FCD34D;">(${maxQty} units)</span>`;
-            }
+        if (currentDashboardDateRange === 'today') {
+            filteredSales = sales.filter(s => new Date(s.date).getTime() >= startOfDay);
+            filteredPurchases = purchases.filter(p => new Date(p.date).getTime() >= startOfDay);
+        } else if (currentDashboardDateRange === 'week') {
+            filteredSales = sales.filter(s => new Date(s.date).getTime() >= startOfWeek);
+            filteredPurchases = purchases.filter(p => new Date(p.date).getTime() >= startOfWeek);
+        } else if (currentDashboardDateRange === 'month') {
+            filteredSales = sales.filter(s => new Date(s.date).getTime() >= startOfMonth);
+            filteredPurchases = purchases.filter(p => new Date(p.date).getTime() >= startOfMonth);
+        } else if (currentDashboardDateRange === 'year') {
+            filteredSales = sales.filter(s => new Date(s.date).getTime() >= startOfYear);
+            filteredPurchases = purchases.filter(p => new Date(p.date).getTime() >= startOfYear);
         }
-        const eHero = document.getElementById('dash-hero-product');
-        if(eHero) eHero.innerHTML = heroProduct;
 
-        // Chart.js Cash Flow
-        const purchases = await StorageManager.getPurchases();
+        // 2. Financial Metrics Calculations
+        let totalRevenue = 0;
+        let cashInflow = 0;
+        let todaySales = 0;
+        let todayCount = 0;
+        let weeklySales = 0;
+        let weeklyCount = 0;
+        let monthlySales = 0;
+        let monthlyCount = 0;
+
+        filteredSales.forEach(s => {
+            const tot = parseFloat(s.total) || 0;
+            const pd = parseFloat(s.paid !== undefined ? s.paid : (tot - (parseFloat(s.due) || 0))) || 0;
+            totalRevenue += tot;
+            cashInflow += pd;
+        });
+
+        // Compute fixed Today, Week, Month totals across all sales regardless of filter
+        sales.forEach(s => {
+            const sTime = new Date(s.date).getTime();
+            const tot = parseFloat(s.total) || 0;
+            if (sTime >= startOfDay) { todaySales += tot; todayCount++; }
+            if (sTime >= startOfWeek) { weeklySales += tot; weeklyCount++; }
+            if (sTime >= startOfMonth) { monthlySales += tot; monthlyCount++; }
+        });
+
+        const totalInvoices = filteredSales.length;
+        const avgOrder = totalInvoices > 0 ? (totalRevenue / totalInvoices) : 0;
+
+        // Purchases Calculation
         let totalPurchases = 0;
-        purchases.forEach(p => totalPurchases += p.totalAmount);
-        
-        const ctx = document.getElementById('cashflow-chart');
-        if (ctx) {
-            if (window.cashFlowChart) {
-                window.cashFlowChart.destroy();
+        filteredPurchases.forEach(p => {
+            totalPurchases += parseFloat(p.totalAmount || p.total) || 0;
+        });
+        const purchaseCount = filteredPurchases.length;
+
+        // Estimated Gross Profit & Margin
+        const grossProfit = totalRevenue - totalPurchases;
+        const profitMargin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100) : 0;
+
+        // Market Due (Receivables)
+        const pendingCredits = credits.filter(c => c.status !== 'Paid');
+        let totalDue = 0;
+        pendingCredits.forEach(c => {
+            const curDue = parseFloat(c.dueAmount !== undefined ? c.dueAmount : (c.balance !== undefined ? c.balance : c.current_due)) || 0;
+            totalDue += curDue;
+        });
+        const pendingDebtorsCount = pendingCredits.length;
+        const collectionRatio = totalRevenue > 0 ? Math.min(100, (cashInflow / totalRevenue) * 100) : 100;
+
+        // Inventory Asset Value & Low Stock
+        let totalStockUnits = 0;
+        let totalStockValuation = 0;
+        let lowStockCount = 0;
+        const lowStockItems = [];
+
+        inventory.forEach(item => {
+            const q = parseFloat(item.quantity) || 0;
+            const pr = parseFloat(item.price) || 0;
+            const minStk = parseFloat(item.minStock || item.min_stock) || 3;
+            totalStockUnits += q;
+            totalStockValuation += (q * pr);
+            if (q <= minStk) {
+                lowStockCount++;
+                lowStockItems.push(item);
             }
-            // Add a slight delay to ensure canvas is painted before Chart.js takes over
-            setTimeout(() => {
-                window.cashFlowChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Overall Cash Flow'],
-                        datasets: [
-                            {
-                                label: 'Total Sales (Revenue)',
-                                data: [totalRevenue],
-                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                                borderColor: '#059669',
-                                borderWidth: 1,
-                                borderRadius: 4
-                            },
-                            {
-                                label: 'Total Purchases (Expense)',
-                                data: [totalPurchases],
-                                backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                                borderColor: '#DC2626',
-                                borderWidth: 1,
-                                borderRadius: 4
+        });
+
+        // 3. Populate Row 1 Core Financial KPI Cards
+        const eTotRev = document.getElementById('dash-total-revenue');
+        if (eTotRev) eTotRev.textContent = `₹ ${totalRevenue.toFixed(2)}`;
+
+        const eRevBills = document.getElementById('dash-revenue-bills');
+        if (eRevBills) eRevBills.innerHTML = `<i class="ph ph-receipt"></i> ${totalInvoices} Invoices`;
+
+        const eCashIn = document.getElementById('dash-cash-inflow');
+        if (eCashIn) eCashIn.textContent = `₹ ${cashInflow.toFixed(2)}`;
+
+        const ePaidRatio = document.getElementById('dash-paid-ratio');
+        if (ePaidRatio) ePaidRatio.innerHTML = `<i class="ph ph-check-circle"></i> ${collectionRatio.toFixed(1)}% Collected`;
+
+        const eTotDue = document.getElementById('dash-total-due');
+        if (eTotDue) eTotDue.textContent = `₹ ${totalDue.toFixed(2)}`;
+
+        const eDueDebtors = document.getElementById('dash-due-debtors');
+        if (eDueDebtors) eDueDebtors.innerHTML = `<i class="ph ph-warning-circle"></i> ${pendingDebtorsCount} Pending`;
+
+        const eTotPurchases = document.getElementById('dash-total-purchases');
+        if (eTotPurchases) eTotPurchases.textContent = `₹ ${totalPurchases.toFixed(2)}`;
+
+        const ePurchCount = document.getElementById('dash-purchase-count');
+        if (ePurchCount) ePurchCount.innerHTML = `<i class="ph ph-truck"></i> ${purchaseCount} Purchases`;
+
+        const eGrossProfit = document.getElementById('dash-gross-profit');
+        if (eGrossProfit) {
+            eGrossProfit.textContent = `₹ ${grossProfit.toFixed(2)}`;
+            eGrossProfit.style.color = grossProfit >= 0 ? '#10B981' : '#DC2626';
+        }
+
+        const eProfitMargin = document.getElementById('dash-profit-margin');
+        if (eProfitMargin) {
+            eProfitMargin.textContent = `Margin: ${profitMargin.toFixed(1)}%`;
+            eProfitMargin.style.color = profitMargin >= 0 ? '#4F46E5' : '#DC2626';
+            eProfitMargin.style.background = profitMargin >= 0 ? '#EEF2FF' : '#FEF2F2';
+        }
+
+        // 4. Populate Row 2 Operational & Inventory Cards
+        const eToday = document.getElementById('dash-daily-sales');
+        if (eToday) eToday.textContent = `₹ ${todaySales.toFixed(2)}`;
+        const eTodayCount = document.getElementById('dash-daily-count');
+        if (eTodayCount) eTodayCount.textContent = `${todayCount} bills today`;
+
+        const eWeek = document.getElementById('dash-weekly-sales');
+        if (eWeek) eWeek.textContent = `₹ ${weeklySales.toFixed(2)}`;
+        const eWeekCount = document.getElementById('dash-weekly-count');
+        if (eWeekCount) eWeekCount.textContent = `${weeklyCount} bills this week`;
+
+        const eMonth = document.getElementById('dash-monthly-sales');
+        if (eMonth) eMonth.textContent = `₹ ${monthlySales.toFixed(2)}`;
+        const eMonthCount = document.getElementById('dash-monthly-count');
+        if (eMonthCount) eMonthCount.textContent = `${monthlyCount} bills this month`;
+
+        const eAvg = document.getElementById('dash-avg-order');
+        if (eAvg) eAvg.textContent = `₹ ${avgOrder.toFixed(2)}`;
+
+        const eStockVal = document.getElementById('dash-stock-value');
+        if (eStockVal) eStockVal.textContent = `₹ ${totalStockValuation.toFixed(2)}`;
+
+        const eStockUnits = document.getElementById('dash-stock-units');
+        if (eStockUnits) eStockUnits.textContent = `${totalStockUnits} Units In Stock`;
+
+        const eLowStockCount = document.getElementById('dash-low-stock-count');
+        if (eLowStockCount) eLowStockCount.textContent = `${lowStockCount} Low Stock Items`;
+
+        const ePartiesCount = document.getElementById('dash-total-parties');
+        if (ePartiesCount) ePartiesCount.textContent = `${parties.length} Customers Registered`;
+
+        // 5. Chart 1: Revenue & Sales Timeline Trend
+        const ctxTrend = document.getElementById('dash-sales-trend-chart');
+        if (ctxTrend) {
+            if (dashSalesTrendChartInstance) dashSalesTrendChartInstance.destroy();
+
+            // Group sales chronologically by date
+            const dailySalesMap = {};
+            // Last 14 days or filtered sales dates
+            filteredSales.forEach(s => {
+                const dKey = formatDateDDMMYY(s.date);
+                dailySalesMap[dKey] = (dailySalesMap[dKey] || 0) + (parseFloat(s.total) || 0);
+            });
+
+            const trendLabels = Object.keys(dailySalesMap);
+            const trendValues = Object.values(dailySalesMap);
+
+            if (trendLabels.length === 0) {
+                trendLabels.push('No Data');
+                trendValues.push(0);
+            }
+
+            dashSalesTrendChartInstance = new Chart(ctxTrend, {
+                type: 'bar',
+                data: {
+                    labels: trendLabels,
+                    datasets: [{
+                        label: 'Sales Revenue (₹)',
+                        data: trendValues,
+                        backgroundColor: 'rgba(37, 99, 235, 0.75)',
+                        borderColor: '#2563EB',
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                        hoverBackgroundColor: '#1D4ED8'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` Sales: ₹ ${(ctx.raw || 0).toFixed(2)}`
                             }
-                        ]
+                        }
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom' }
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (val) => '₹ ' + val
+                            },
+                            grid: { color: '#F1F5F9' }
                         },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) { return '₹ ' + value; }
-                                }
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 6. Chart 2: Cash Flow (Sales vs Purchases)
+        const ctxCashFlow = document.getElementById('cashflow-chart');
+        if (ctxCashFlow) {
+            if (dashCashFlowChartInstance) dashCashFlowChartInstance.destroy();
+
+            dashCashFlowChartInstance = new Chart(ctxCashFlow, {
+                type: 'bar',
+                data: {
+                    labels: ['Selected Period Overview'],
+                    datasets: [
+                        {
+                            label: 'Total Sales (Revenue)',
+                            data: [totalRevenue],
+                            backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                            borderColor: '#059669',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Cash Inflow (Paid)',
+                            data: [cashInflow],
+                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                            borderColor: '#2563EB',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Supplier Outflow (Purchases)',
+                            data: [totalPurchases],
+                            backgroundColor: 'rgba(239, 68, 68, 0.85)',
+                            borderColor: '#DC2626',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.dataset.label}: ₹ ${(ctx.raw || 0).toFixed(2)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: (v) => '₹ ' + v },
+                            grid: { color: '#F1F5F9' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // 7. Chart 3: Category & Brand Sales Share (Doughnut)
+        const ctxCategory = document.getElementById('dash-category-chart');
+        if (ctxCategory) {
+            if (dashCategoryChartInstance) dashCategoryChartInstance.destroy();
+
+            const catMap = {};
+            filteredSales.forEach(sale => {
+                if (sale.items && Array.isArray(sale.items)) {
+                    sale.items.forEach(item => {
+                        const cat = item.category || 'General';
+                        const itemAmt = (parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0);
+                        catMap[cat] = (catMap[cat] || 0) + itemAmt;
+                    });
+                }
+            });
+
+            let catLabels = Object.keys(catMap);
+            let catValues = Object.values(catMap);
+
+            if (catLabels.length === 0) {
+                catLabels = ['General'];
+                catValues = [totalRevenue || 1];
+            }
+
+            const chartColors = ['#4F46E5', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#F97316', '#14B8A6'];
+
+            dashCategoryChartInstance = new Chart(ctxCategory, {
+                type: 'doughnut',
+                data: {
+                    labels: catLabels,
+                    datasets: [{
+                        data: catValues,
+                        backgroundColor: chartColors.slice(0, catLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#FFFFFF'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.label}: ₹ ${(ctx.raw || 0).toFixed(2)}`
                             }
                         }
                     }
-                });
-            }, 100);
+                }
+            });
+        }
+
+        // 8. Chart 4: Credit Payment Realization
+        const ctxPayment = document.getElementById('dash-payment-health-chart');
+        if (ctxPayment) {
+            if (dashPaymentHealthChartInstance) dashPaymentHealthChartInstance.destroy();
+
+            const paidAmt = cashInflow;
+            const dueAmt = totalDue;
+
+            dashPaymentHealthChartInstance = new Chart(ctxPayment, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Realized Cash', 'Pending Market Due'],
+                    datasets: [{
+                        data: [paidAmt > 0 ? paidAmt : 1, dueAmt],
+                        backgroundColor: ['#10B981', '#EF4444'],
+                        borderWidth: 2,
+                        borderColor: '#FFFFFF'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.label}: ₹ ${(ctx.raw || 0).toFixed(2)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 9. Smart Business Insights 1: Top 5 Best-Selling Products
+        const topProductsBody = document.getElementById('dash-top-products-body');
+        if (topProductsBody) {
+            const productAgg = {};
+            sales.forEach(sale => {
+                if (sale.items && Array.isArray(sale.items)) {
+                    sale.items.forEach(item => {
+                        const key = `${item.brand || ''} ${item.variant || ''}`.trim() || item.category;
+                        if (!productAgg[key]) {
+                            productAgg[key] = {
+                                name: key,
+                                category: item.category || '-',
+                                units: 0,
+                                revenue: 0
+                            };
+                        }
+                        const q = parseFloat(item.qty) || 0;
+                        const p = parseFloat(item.price) || 0;
+                        productAgg[key].units += q;
+                        productAgg[key].revenue += (q * p);
+                    });
+                }
+            });
+
+            const sortedProducts = Object.values(productAgg).sort((a, b) => b.units - a.units).slice(0, 5);
+
+            if (sortedProducts.length === 0) {
+                topProductsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No product sales recorded yet.</td></tr>';
+            } else {
+                topProductsBody.innerHTML = sortedProducts.map((p, idx) => `
+                    <tr>
+                        <td><span class="rank-pill">${idx + 1}</span></td>
+                        <td style="font-weight: 600; color: var(--text-main);">${p.name}</td>
+                        <td><span class="kpi-badge" style="background: #F1F5F9; color: #475569;">${p.category}</span></td>
+                        <td style="text-align: right; font-weight: 700; color: var(--primary-color);">${p.units}</td>
+                        <td style="text-align: right; font-weight: 600;">₹ ${p.revenue.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // 10. Smart Business Insights 2: Top 5 Customers by Trade
+        const topCustomersBody = document.getElementById('dash-top-customers-body');
+        if (topCustomersBody) {
+            const customerAgg = {};
+            sales.forEach(sale => {
+                const name = (sale.buyer_name || 'Walk-in Customer').trim();
+                if (!customerAgg[name]) {
+                    customerAgg[name] = {
+                        name: name,
+                        mobile: sale.mobile || '-',
+                        trade: 0,
+                        due: 0
+                    };
+                }
+                customerAgg[name].trade += (parseFloat(sale.total) || 0);
+            });
+
+            // Match current dues
+            credits.forEach(credit => {
+                if (credit.status !== 'Paid') {
+                    const name = (credit.buyer_name || '').trim();
+                    if (customerAgg[name]) {
+                        customerAgg[name].due += (parseFloat(credit.dueAmount || credit.balance || credit.current_due) || 0);
+                    }
+                }
+            });
+
+            const sortedCustomers = Object.values(customerAgg).sort((a, b) => b.trade - a.trade).slice(0, 5);
+
+            if (sortedCustomers.length === 0) {
+                topCustomersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No customer transactions recorded yet.</td></tr>';
+            } else {
+                topCustomersBody.innerHTML = sortedCustomers.map((c, idx) => `
+                    <tr>
+                        <td><span class="rank-pill">${idx + 1}</span></td>
+                        <td style="font-weight: 600;">${c.name}</td>
+                        <td style="font-size: 0.8rem; color: var(--text-muted);">${c.mobile !== '-' ? '📞 ' + c.mobile : '-'}</td>
+                        <td style="text-align: right; font-weight: 700; color: var(--primary-color);">₹ ${c.trade.toFixed(2)}</td>
+                        <td style="text-align: right; font-weight: 600; color: ${c.due > 0 ? '#DC2626' : '#10B981'};">₹ ${c.due.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // 11. Smart Business Insights 3: Critical Low Stock Alerts
+        const lowStockBody = document.getElementById('dash-low-stock-body');
+        if (lowStockBody) {
+            // Sort lowest stock first (0 first, then 1, 2, 3)
+            const sortedLowStock = lowStockItems.sort((a, b) => (parseFloat(a.quantity) || 0) - (parseFloat(b.quantity) || 0)).slice(0, 5);
+
+            if (sortedLowStock.length === 0) {
+                lowStockBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #10B981; font-weight: 600; padding: 1.5rem;">🎉 All items have sufficient stock levels!</td></tr>';
+            } else {
+                lowStockBody.innerHTML = sortedLowStock.map(item => {
+                    const qty = parseFloat(item.quantity) || 0;
+                    const isOut = qty === 0;
+                    return `
+                        <tr>
+                            <td style="font-weight: 600;">${item.brand || ''} ${item.variant || ''}</td>
+                            <td><span class="kpi-badge" style="background: #F1F5F9; color: #475569;">${item.category || '-'}</span></td>
+                            <td style="text-align: center; font-weight: 700; color: ${isOut ? '#DC2626' : '#D97706'};">${qty} ${item.unit || 'pcs'}</td>
+                            <td style="text-align: right; font-size: 0.85rem;">₹ ${(parseFloat(item.price) || 0).toFixed(2)}</td>
+                            <td style="text-align: center;">
+                                <span class="kpi-badge" style="background: ${isOut ? '#FEF2F2' : '#FFFBEB'}; color: ${isOut ? '#DC2626' : '#D97706'};">
+                                    ${isOut ? 'Out of Stock' : 'Reorder Soon'}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        // 12. Smart Business Insights 4: Recent 5 Invoices Feed
+        const recentSalesBody = document.getElementById('dash-recent-sales-body');
+        if (recentSalesBody) {
+            const sortedSales = [...sales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+
+            if (sortedSales.length === 0) {
+                recentSalesBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No invoices generated yet.</td></tr>';
+            } else {
+                recentSalesBody.innerHTML = sortedSales.map(s => {
+                    const tot = parseFloat(s.total) || 0;
+                    const due = parseFloat(s.due) || 0;
+                    const isFullyPaid = due <= 0;
+                    return `
+                        <tr>
+                            <td style="font-weight: 600; color: var(--primary-color);">${s.invoice_no || '-'}</td>
+                            <td style="white-space: nowrap; font-size: 0.8rem;">${formatDateDDMMYY(s.date)}</td>
+                            <td style="font-weight: 500;">${s.buyer_name || 'Walk-in'}</td>
+                            <td style="text-align: right; font-weight: 700;">₹ ${tot.toFixed(2)}</td>
+                            <td style="text-align: center;">
+                                <span class="kpi-badge" style="background: ${isFullyPaid ? '#ECFDF5' : '#FEF2F2'}; color: ${isFullyPaid ? '#059669' : '#DC2626'};">
+                                    ${isFullyPaid ? 'Paid' : 'Due: ₹' + due.toFixed(0)}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
         }
     }
-    
+
     renderHomeDashboard();
 
     // Paid Amount, Due Amount and GST Logic
