@@ -37,7 +37,9 @@ const outputContent = `// Auto-generated configuration from .env
 // DO NOT COMMIT THIS FILE TO VERSION CONTROL
 window.__ENV__ = Object.assign(window.__ENV__ || {}, {
     SUPABASE_URL: ${JSON.stringify(parsed.SUPABASE_URL || '')},
-    SUPABASE_ANON_KEY: ${JSON.stringify(parsed.SUPABASE_ANON_KEY || '')}
+    SUPABASE_ANON_KEY: ${JSON.stringify(parsed.SUPABASE_ANON_KEY || '')},
+    APP_USERNAME: ${JSON.stringify(parsed.APP_USERNAME || 'SirviBrothers')},
+    APP_PASSWORD: ${JSON.stringify(parsed.APP_PASSWORD || 'SB1234')}
 });
 `;
 

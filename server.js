@@ -69,7 +69,9 @@ const server = http.createServer((req, res) => {
         });
         res.end(JSON.stringify({
             SUPABASE_URL: envConfig.SUPABASE_URL || '',
-            SUPABASE_ANON_KEY: envConfig.SUPABASE_ANON_KEY || ''
+            SUPABASE_ANON_KEY: envConfig.SUPABASE_ANON_KEY || '',
+            APP_USERNAME: envConfig.APP_USERNAME || 'SirviBrothers',
+            APP_PASSWORD: envConfig.APP_PASSWORD || 'SB1234'
         }));
         return;
     }
@@ -78,7 +80,9 @@ const server = http.createServer((req, res) => {
     if (pathname === '/js/env-config.js') {
         const script = `window.__ENV__ = Object.assign(window.__ENV__ || {}, {
     SUPABASE_URL: ${JSON.stringify(envConfig.SUPABASE_URL || '')},
-    SUPABASE_ANON_KEY: ${JSON.stringify(envConfig.SUPABASE_ANON_KEY || '')}
+    SUPABASE_ANON_KEY: ${JSON.stringify(envConfig.SUPABASE_ANON_KEY || '')},
+    APP_USERNAME: ${JSON.stringify(envConfig.APP_USERNAME || 'SirviBrothers')},
+    APP_PASSWORD: ${JSON.stringify(envConfig.APP_PASSWORD || 'SB1234')}
 });\n`;
         res.writeHead(200, {
             'Content-Type': 'application/javascript; charset=UTF-8',

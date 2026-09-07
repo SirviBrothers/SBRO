@@ -12,7 +12,9 @@
 (function () {
     const DEFAULT_CONFIG = {
         SUPABASE_URL: "https://ztlrayekobgcllnxmqft.supabase.co",
-        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE"
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0bHJheWVrb2JnY2xsbnhtcWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzc4NTIsImV4cCI6MjEwMzk1Mzg1Mn0.SCv_r5KOQIN0RTvEEQrZLCOGaaneWsPlJuIMnyxYXkE",
+        APP_USERNAME: "SirviBrothers",
+        APP_PASSWORD: "SB1234"
     };
 
     window.__ENV__ = Object.assign({}, DEFAULT_CONFIG, window.__ENV__ || {});
@@ -61,6 +63,8 @@
                     if (data.SUPABASE_URL && data.SUPABASE_ANON_KEY) {
                         window.__ENV__.SUPABASE_URL = data.SUPABASE_URL;
                         window.__ENV__.SUPABASE_ANON_KEY = data.SUPABASE_ANON_KEY;
+                        if (data.APP_USERNAME) window.__ENV__.APP_USERNAME = data.APP_USERNAME;
+                        if (data.APP_PASSWORD) window.__ENV__.APP_PASSWORD = data.APP_PASSWORD;
                         ensureClient();
                     }
                 }
@@ -74,8 +78,10 @@
                     if (parsed.SUPABASE_URL && parsed.SUPABASE_ANON_KEY) {
                         window.__ENV__.SUPABASE_URL = parsed.SUPABASE_URL;
                         window.__ENV__.SUPABASE_ANON_KEY = parsed.SUPABASE_ANON_KEY;
-                        ensureClient();
                     }
+                    if (parsed.APP_USERNAME) window.__ENV__.APP_USERNAME = parsed.APP_USERNAME;
+                    if (parsed.APP_PASSWORD) window.__ENV__.APP_PASSWORD = parsed.APP_PASSWORD;
+                    ensureClient();
                 }
             } catch (e) {}
         }
