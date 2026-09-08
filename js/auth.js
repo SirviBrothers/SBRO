@@ -135,14 +135,6 @@ setInterval(() => {
     }
 }, 2000);
 
-// Screen Off / Visibility Change Lock
-// Triggers when screen turns off, phone locks, computer sleeps, or user switches tabs/windows
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        // Always lock when screen turns off or user navigates away
-        lockDashboard();
-    }
-});
 
 // Logout Logic
 document.addEventListener('DOMContentLoaded', () => {
